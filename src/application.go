@@ -59,7 +59,7 @@ func (a *Application) processSignals(cancelFunc context.CancelFunc) {
 	go func() {
 		select {
 		case <-a.sigs:
-			log.Println("application: received shutdown signal from OS")
+			log.Println("application:: received shutdown signal from OS")
 			cancelFunc()
 			break
 		}
