@@ -15,7 +15,7 @@ type AuthService struct {
 }
 
 var randomNames = [10]string{"Ron", "John", "Don", "Hubert", "Mike", "Alex", "Anton", "Mathias", "Dora", "Jane"}
-var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9 \u00F0-\u02AF]+`)
+var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9 \x{00F0}-\x{02AF}]+`)
 
 func (a *AuthService) Authenticate(userName string) (*dto.User, error) {
 	userName = nonAlphanumericRegex.ReplaceAllString(userName, "")
