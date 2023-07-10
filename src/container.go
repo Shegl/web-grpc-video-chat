@@ -4,6 +4,7 @@ import (
 	"go.uber.org/dig"
 	"macos-cam-grpc-chat/src/http"
 	"macos-cam-grpc-chat/src/http/controllers"
+	"macos-cam-grpc-chat/src/http/services"
 )
 
 func BuildContainer() *dig.Container {
@@ -13,6 +14,8 @@ func BuildContainer() *dig.Container {
 
 	processError(container.Provide(controllers.NewAuthController))
 	processError(container.Provide(controllers.NewRoomController))
+
+	processError(container.Provide(services.NewAuthService))
 
 	return container
 }

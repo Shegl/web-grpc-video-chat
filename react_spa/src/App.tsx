@@ -1,35 +1,69 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
+import 'bootstrap/dist/css/bootstrap.min.css';
+import {
+    createBrowserRouter,
+    RouterProvider,
+    useLoaderData,
+} from "react-router-dom"
+import {Container} from "react-bootstrap";
+import AuthForm from "./components/auth-form/AuthForm";
+
+let router = createBrowserRouter([
+    {
+        path: "/",
+        Component: Index
+    },
+    {
+        path: "/rooms",
+        Component: RoomsPage
+    },
+]);
 
 function App() {
-  const [count, setCount] = useState(0)
+    return <RouterProvider router={router} fallbackElement={<Fallback />} />;
+}
 
-  return (
-    <>
-      <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+function Index() {
+    return (
+        <>
+            <Container className="p-5 mb-4 bg-light rounded-3">
+                <h1 className="Header">React/Golang WebChat demo</h1>
+            </Container>
+            <AuthForm></AuthForm>
+            <p className="read-the-docs">
+                Please provide your preferred name for the application and then press the button.
+            </p>
+        </>
+    )
+}
+
+function RoomsPage() {
+    const [userName, setUsername] = useState('')
+
+    return (
+        <>
+            <h3>Hello, {userName}</h3>
+            <div className="card">
+                <button>
+                    Create room
+                </button>
+            </div>
+            <div className="card">
+                <input type="text" name="roomId" />
+                <button>
+                    Join room
+                </button>
+            </div>
+            <p className="read-the-docs">
+                Create room or join existing one
+            </p>
+        </>
+    )
+}
+
+export function Fallback() {
+    return <p>Performing initial data load</p>;
 }
 
 export default App
