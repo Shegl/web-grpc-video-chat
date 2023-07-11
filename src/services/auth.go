@@ -3,7 +3,7 @@ package services
 import (
 	"errors"
 	"github.com/google/uuid"
-	"macos-cam-grpc-chat/src/http/dto"
+	"macos-cam-grpc-chat/src/dto"
 	"math/rand"
 	"regexp"
 	"sync"

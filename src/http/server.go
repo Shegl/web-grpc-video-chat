@@ -5,24 +5,31 @@ import (
 	"github.com/gin-gonic/gin"
 	"log"
 	"macos-cam-grpc-chat/src/http/controllers"
+	"macos-cam-grpc-chat/src/http/middleware"
 	"net/http"
 	"sync"
 	"time"
 )
 
 type WebServer struct {
-	router         *gin.Engine
-	srv            *http.Server
-	wg             *sync.WaitGroup
+	router *gin.Engine
+	srv    *http.Server
+	wg     *sync.WaitGroup
+
 	authController *controllers.AuthController
 	roomController *controllers.RoomController
-	shutdownChan   chan struct{}
+
+	corsMiddleware *middleware.CorsMiddleware
+
+	shutdownChan chan struct{}
 }
 
 func (w *WebServer) Init(addr string, wg *sync.WaitGroup, shutdownChan chan struct{}) error {
 	w.shutdownChan = shutdownChan
 	w.wg = wg
+
 	w.router = gin.New()
+	w.registerGlobalMiddlewares()
 	w.initRoutes()
 
 	w.srv = &http.Server{
@@ -73,6 +80,8 @@ func (w *WebServer) Run(ctx context.Context) error {
 
 func (w *WebServer) initRoutes() {
 	w.router.POST("/auth", w.authController.Auth)
+	w.router.POST("/check", w.authController.Check)
+	w.router.POST("/logout", w.authController.Logout)
 
 	w.router.POST("/make-room", w.roomController.Make)
 	w.router.POST("/join-room", w.roomController.Join)
@@ -81,13 +90,19 @@ func (w *WebServer) initRoutes() {
 	w.router.GET("/room/:id", w.roomController.StreamReceive)
 }
 
+func (w *WebServer) registerGlobalMiddlewares() {
+	w.router.Use(w.corsMiddleware.Handle)
+}
+
 func NewWebServer(
 	authController *controllers.AuthController,
 	roomController *controllers.RoomController,
+	corsMiddleware *middleware.CorsMiddleware,
 ) *WebServer {
 	webServer := &WebServer{
 		authController: authController,
 		roomController: roomController,
+		corsMiddleware: corsMiddleware,
 
 		router: nil,
 	}

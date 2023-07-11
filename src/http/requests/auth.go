@@ -7,3 +7,7 @@ type AuthRequest struct {
 type LogoutRequest struct {
 	UUID string `form:"uuid"`
 }
+
+type CheckRequest struct {
+	UUID string `form:"uuid"`
+}

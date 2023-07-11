@@ -3,9 +3,9 @@ package controllers
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"macos-cam-grpc-chat/src/http/dto"
+	"macos-cam-grpc-chat/src/dto"
 	"macos-cam-grpc-chat/src/http/requests"
-	"macos-cam-grpc-chat/src/http/services"
+	"macos-cam-grpc-chat/src/services"
 )
 
 type AuthController struct {
@@ -13,17 +13,20 @@ type AuthController struct {
 }
 
 func (c *AuthController) Check(ctx *gin.Context) {
-	uuidString, err := ctx.Cookie("user_uuid")
-	if err != nil || uuidString == "" {
+	var request requests.CheckRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(422, nil)
+		return
+	}
+	if request.UUID == "" {
 		ctx.JSON(401, nil)
 		return
 	}
 	var user *dto.User
-	userUUID, err := uuid.Parse(uuidString)
+	userUUID, err := uuid.Parse(request.UUID)
 	if err == nil {
 		user, err = c.authService.GetUser(userUUID)
 		if err != nil {
-			ctx.SetCookie("user_uuid", "", -1, "/", "localhost", false, true)
 			ctx.JSON(401, nil)
 			return
 		}
@@ -43,7 +46,6 @@ func (c *AuthController) Auth(ctx *gin.Context) {
 	if err != nil {
 		ctx.JSON(422, err)
 	}
-	ctx.SetCookie("user_uuid", user.UUID.String(), 84600, "/", "localhost", false, true)
 	ctx.JSON(200, user)
 }
 
@@ -58,8 +60,6 @@ func (c *AuthController) Logout(ctx *gin.Context) {
 	if err == nil {
 		c.authService.Logout(userUUID)
 	}
-
-	ctx.SetCookie("user_uuid", "", -1, "/", "localhost", false, true)
 	ctx.JSON(200, "OK")
 }
 

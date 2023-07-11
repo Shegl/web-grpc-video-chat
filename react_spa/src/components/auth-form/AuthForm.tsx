@@ -1,32 +1,41 @@
-import { useState, ChangeEvent, FormEvent } from 'react';
+import { useState, ChangeEvent, FormEvent, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Form, Col, Row, Button, Container} from "react-bootstrap";
+import { useCookies } from "react-cookie";
+import { UserContext } from "../../App";
 
 interface AuthFormData {
     username: string;
 }
 
 const AuthForm = () => {
+    const { setAuthenticated, userData, setUserData } = useContext(UserContext);
+    const [cookie, setCookie] = useCookies(['userUuid']);
     const [formData, setFormData] = useState<AuthFormData>({
         username: '',
     });
-
     const navigate = useNavigate();
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-
         try {
-            const response = await axios.post('http://localhost:3000/auth', formData);
-            if (response.data.success) {
-                navigate('/rooms');
+            const response = await axios.post('http://dev.test:3000/auth', formData);
+            if (response.data.username && response.data.uuid) {
+
+                userData.username = response.data.username;
+                userData.uuid = response.data.uuid;
+
+                setUserData(userData)
+                setAuthenticated(true)
+                setCookie('userUuid', response.data.uuid, { path: '/' });
+                navigate('/home');
             } else {
                 // well, we are on happy path
             }
         } catch (error) {
-            navigate('/rooms');
-            console.error("Somethings is wrong, and backend seems to send errors")
+            console.error(error);
+            console.error("Somethings is wrong, and backend seems to send errors");
         }
     };
 
