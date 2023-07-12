@@ -69,9 +69,29 @@ func (r *RoomService) join(roomUUID uuid.UUID, user *dto.User) *dto.Room {
 	return nil
 }
 
+func (r *RoomService) State(user *dto.User) *dto.Room {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if room, exists := r.asAuthor[user.UUID]; exists {
+		return room
+	}
+	if room, exists := r.asGuest[user.UUID]; exists {
+		return room
+	}
+	return nil
+}
+
 func (r *RoomService) Leave(user *dto.User) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if room, exists := r.asAuthor[user.UUID]; exists {
+		delete(r.rooms, room.UUID)
+		delete(r.asAuthor, user.UUID)
+		if room.Guest != nil {
+			delete(r.asGuest, room.Guest.UUID)
+		}
+		return
+	}
 	if room, exists := r.asGuest[user.UUID]; exists {
 		room.Guest = nil
 		delete(r.asGuest, user.UUID)

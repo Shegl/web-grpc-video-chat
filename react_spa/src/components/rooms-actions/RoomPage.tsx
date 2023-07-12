@@ -1,8 +1,48 @@
-import {useContext, useEffect, useState} from 'react';
+import {createContext, useContext, useEffect, useState} from 'react';
 import {Fallback, Logout, useAuth, UserContext} from "../../App";
 import { Button, Col, Container, Form, Row } from "react-bootstrap";
 import { useCookies } from "react-cookie";
 import { useNavigate } from 'react-router-dom';
+import axios from "axios";
+
+const roomCheck = (cookies, setCookie, navigate, context, setLoaded) => {
+    const { authenticated, setAuthenticated, userData, setUserData } = context;
+    if (authenticated && userData.inRoom) {
+        setLoaded(true);
+    } else {
+        let userUUID = cookies.userUuid;
+        if (userUUID) {
+            axios.post('http://dev.test:3000/room/state', {uuid: userUUID}).then(
+                (response) => {
+                    if (response.status == 200) {
+                        let userData = context.userData;
+                        userData.uuid = userUUID;
+                        userData.inRoom = true;
+                        userData.roomAuthor = response.data.author.uuid == context.userData.uuid;
+                        userData.username = userData.roomAuthor ? response.data.author.username : response.data.guest.username;
+                        userData.roomUuid = response.data.uuid
+                        setAuthenticated(true);
+                        setUserData(userData);
+                        setLoaded(true);
+                        return;
+                    } else {
+                        navigate('/home');
+                    }
+                }
+            ).catch((error) => {
+                if (error.response) {
+                    if (error.response.status == 422) {
+                        navigate('/home');
+                        return;
+                    }
+                }
+                setAuthenticated(false);
+                setCookie('userUuid', '', { path: '/' });
+                navigate('/');
+            })
+        }
+    }
+}
 
 function RoomPage() {
     const [loaded, setLoaded] = useState(false);
@@ -11,16 +51,24 @@ function RoomPage() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        useAuth("/room", false, cookies, setCookie, navigate, context, setLoaded);
+        roomCheck(cookies, setCookie, navigate, context, setLoaded);
     });
+
+    const handleLeave = () => {
+        axios.post('http://dev.test:3000/room/leave', {uuid: context.userData.uuid}).then(
+            navigate('/home')
+        ).catch(
+            navigate('/home')
+        )
+    };
 
     return (
         !loaded ? <Fallback/> :
         <>
-            <Container className="p-5 mb-4 bg-light rounded-3">
-                <h1 className="Header">React/Golang WebChat demo</h1>
+            <Container className="p-1 mb-2 bg-light rounded-3">
+                <h4 className="Header">Room uuid: {context.userData.roomUuid}</h4>
+                <Button type="button" variant="warning" onClick={handleLeave} className="btn-lg">Leave&nbsp;room</Button>
             </Container>
-            <h3>Hello, {context.userData.username} <Logout/></h3>
             <Form>
                 <div className="card">
                     <Container>

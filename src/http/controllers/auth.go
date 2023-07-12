@@ -18,10 +18,6 @@ func (c *AuthController) Check(ctx *gin.Context) {
 		ctx.JSON(422, nil)
 		return
 	}
-	if request.UUID == "" {
-		ctx.JSON(401, nil)
-		return
-	}
 	var user *dto.User
 	userUUID, err := uuid.Parse(request.UUID)
 	if err == nil {

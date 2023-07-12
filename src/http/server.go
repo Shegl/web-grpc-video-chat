@@ -83,8 +83,10 @@ func (w *WebServer) initRoutes() {
 	w.router.POST("/check", w.authController.Check)
 	w.router.POST("/logout", w.authController.Logout)
 
-	w.router.POST("/make-room", w.roomController.Make)
-	w.router.POST("/join-room", w.roomController.Join)
+	w.router.POST("/room/make", w.roomController.Make)
+	w.router.POST("/room/join", w.roomController.Join)
+	w.router.POST("/room/state", w.roomController.State)
+	w.router.POST("/room/leave", w.roomController.Leave)
 
 	w.router.POST("/room/:id", w.roomController.StreamPush)
 	w.router.GET("/room/:id", w.roomController.StreamReceive)

@@ -1,5 +1,5 @@
-import {useContext, useEffect, useState} from 'react';
-import {Fallback, Logout, useAuth, UserContext} from "../../App";
+import { useContext, useEffect, useState } from 'react';
+import { Fallback, Logout, useAuth, UserContext } from "../../App";
 import { Button, Col, Container, Form, Row } from "react-bootstrap";
 import { useCookies } from "react-cookie";
 import { useNavigate } from 'react-router-dom';
@@ -11,10 +11,6 @@ function HomePage() {
     const [cookies, setCookie] = useCookies(['userUuid']);
     const navigate = useNavigate();
 
-    const [formData, setFormData] = useState({
-        uuid: context.userData.uuid,
-    });
-
     useEffect(() => {
         useAuth("/home", false, cookies, setCookie, navigate, context, setLoaded);
     });
@@ -22,13 +18,13 @@ function HomePage() {
     const handleClickCreateRoom = async () => {
         setLoaded(false)
         try {
-            const response = await axios.post('http://dev.test:3000/room', formData);
+            const response = await axios.post('http://dev.test:3000/room/make', { uuid: context.userData.uuid});
             if (response.data) {
-                if (response.data.created) {
+                if (response.data.state > 0) {
                     let userData = context.userData
                     userData.inRoom = true;
-                    userData.roomAuthor = response.data.roomAuthor
-                    userData.roomUuid = response.data.roomUuid
+                    userData.roomAuthor = response.data.author.uuid == context.userData.uuid
+                    userData.roomUuid = response.data.uuid
                     context.setUserData(userData)
                     navigate('/room');
                 } else {
@@ -58,16 +54,16 @@ function HomePage() {
                     <Container>
                         <Row>
                             <Col xs={3} className="text-center">
-                                <Button type="submit" variant="success" onClick={handleClickCreateRoom} className="btn-lg">Create&nbsp;room</Button>
+                                <Button type="button" variant="success" onClick={handleClickCreateRoom} className="btn-lg">Create&nbsp;room</Button>
                             </Col>
                             <Col xs={1} className="text-center">
                                 <p className="some-pad-top">or</p>
                             </Col>
                             <Col xs={7} className="text-center">
-                                <Form.Control placeHolder="Enter room UUID..." className="some-margin-top" type="text" name="roomId" id="roomId"></Form.Control>
+                                <Form.Control placeholder="Enter room UUID..." className="some-margin-top" type="text" name="roomId" id="roomId"></Form.Control>
                             </Col>
                             <Col xs={1}>
-                                <Button className="some-margin-top" type="submit" variant="primary" onClick={handleClickJoinRoomHandle} >Join</Button>
+                                <Button className="some-margin-top" type="button" variant="primary" onClick={handleClickJoinRoomHandle} >Join</Button>
                             </Col>
                         </Row>
                     </Container>

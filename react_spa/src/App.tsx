@@ -11,6 +11,7 @@ import HomePage from "./components/rooms-actions/HomePage";
 import { useCookies } from "react-cookie";
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import RoomPage from "./components/rooms-actions/RoomPage";
 
 const defaultUserContext = {
     username: 'Anonymous',
@@ -59,6 +60,16 @@ function App() {
                             </UserContext.Provider>
                         }
                     />
+                    <Route
+                        path="/room"
+                        element={
+                            <UserContext.Provider value={value}>
+                                {useMemo(() => (
+                                    <RoomPage/>
+                                ), [])}
+                            </UserContext.Provider>
+                        }
+                    />
                 </Routes>
             </BrowserRouter>
     );
@@ -69,9 +80,9 @@ export const useAuth = (page: string, redirect: boolean, cookies, setCookie, nav
     if (authenticated) {
         if (redirect) {
             navigate(page);
-            setLoaded(false);
+        } else {
+            setLoaded(true);
         }
-        setLoaded(true);
     } else {
         let userUUID = cookies.userUuid;
         if (userUUID) {
@@ -85,27 +96,23 @@ export const useAuth = (page: string, redirect: boolean, cookies, setCookie, nav
                         })
                         if (redirect) {
                             navigate(page);
-                            setLoaded(false);
+                        } else {
+                            setLoaded(true);
                         }
-                        setLoaded(true);
-                        return
                     } else {
                         setAuthenticated(false);
                         navigate("/");
                         setLoaded(true);
-                        return;
                     }
                 }
             ).catch(
                 (reason) => {
                     setCookie('userUuid', '', { path: '/' });
-                    setLoaded(false);
                     navigate('/')
                 }
             )
         } else {
             if (!redirect && page != '/') {
-                setLoaded(false);
                 navigate('/');
             } else {
                 setLoaded(true);

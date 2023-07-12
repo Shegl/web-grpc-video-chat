@@ -47,11 +47,10 @@ func (a *AuthService) Authenticate(userName string) (*dto.User, error) {
 
 func (a *AuthService) GetUser(userUUID uuid.UUID) (*dto.User, error) {
 	a.mu.RLock()
+	defer a.mu.RUnlock()
 	if user, exists := a.authUsers[userUUID]; !exists {
-		a.mu.RUnlock()
 		return user, errors.New("there is no user with provided UUID")
 	} else {
-		a.mu.RUnlock()
 		return user, nil
 	}
 }
