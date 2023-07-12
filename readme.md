@@ -1,4 +1,4 @@
-## macos-cam-grpc-chat
+## web-grpc-video-chat
 
 Hello,
 

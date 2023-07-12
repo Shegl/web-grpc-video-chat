@@ -19,6 +19,7 @@ func BuildContainer() *dig.Container {
 	processError(container.Provide(middleware.NewCorsMiddleware))
 
 	processError(container.Provide(services.NewAuthService))
+	processError(container.Provide(services.NewRoomService))
 
 	return container
 }
