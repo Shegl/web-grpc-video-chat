@@ -50,7 +50,7 @@ function HomePage() {
             </Container>
             <h3>Hello, {context.userData.username} <Logout/></h3>
             <Form>
-                <div className="card">
+                <div className="card card-2">
                     <Container>
                         <Row>
                             <Col xs={3} className="text-center">

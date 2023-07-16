@@ -4,15 +4,17 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"macos-cam-grpc-chat/src/http"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+	"web-grpc-video-chat/src/chat"
+	"web-grpc-video-chat/src/http"
 )
 
 type Application struct {
 	webServer    *http.WebServer
+	chatServer   *chat.ChatServiceServer
 	wg           sync.WaitGroup
 	sigs         chan os.Signal
 	shutdownChan chan struct{}
@@ -35,6 +37,11 @@ func (a *Application) Init(version string) error {
 		a.shutdownChan,
 	)
 
+	a.chatServer.Init(
+		":8080",
+		&a.wg,
+	)
+
 	fmt.Println("application:: Init() :: init complete")
 	return nil
 }
@@ -45,6 +52,11 @@ func (a *Application) Run(ctx context.Context) {
 	a.processSignals(cancelFunc)
 
 	err := a.webServer.Run(cancelCtx)
+	if err != nil {
+		panic(err)
+	}
+
+	go a.chatServer.Run(cancelCtx)
 	if err != nil {
 		panic(err)
 	}
@@ -68,8 +80,10 @@ func (a *Application) processSignals(cancelFunc context.CancelFunc) {
 
 func NewApplication(
 	webServer *http.WebServer,
+	chatServer *chat.ChatServiceServer,
 ) *Application {
 	return &Application{
-		webServer: webServer,
+		webServer:  webServer,
+		chatServer: chatServer,
 	}
 }

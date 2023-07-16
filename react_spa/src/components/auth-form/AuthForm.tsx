@@ -11,7 +11,7 @@ interface AuthFormData {
 
 const AuthForm = () => {
     const { setAuthenticated, userData, setUserData } = useContext(UserContext);
-    const [cookie, setCookie] = useCookies(['userUuid']);
+    const [_, setCookie] = useCookies(['userUuid']);
     const [formData, setFormData] = useState<AuthFormData>({
         username: '',
     });
@@ -48,7 +48,7 @@ const AuthForm = () => {
 
     return (
         <Form onSubmit={handleSubmit}>
-            <div className="card">
+            <div className="card card-2">
                 <Container>
                     <Row>
                         <Col xs={8}>

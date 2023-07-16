@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"go.uber.org/dig"
-	"macos-cam-grpc-chat/src"
+	"web-grpc-video-chat/src"
 )
 
 var Container *dig.Container

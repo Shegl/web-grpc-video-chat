@@ -1,11 +1,13 @@
-import {createContext, useContext, useEffect, useState} from 'react';
-import {Fallback, Logout, useAuth, UserContext} from "../../App";
-import { Button, Col, Container, Form, Row } from "react-bootstrap";
+import { useContext, useEffect, useState } from 'react';
+import { Fallback, UserContext } from "../../App";
+import {Button, Col, Container, Form, Row, InputGroup} from "react-bootstrap";
 import { useCookies } from "react-cookie";
 import { useNavigate } from 'react-router-dom';
 import axios from "axios";
+import ChatForm from "../chat/ChatForm";
+import VideoForm from "../chat/VideoForm";
 
-const roomCheck = (cookies, setCookie, navigate, context, setLoaded) => {
+const roomCheck = (cookies: any, setCookie: any, navigate: any, context: any, setLoaded: any) => {
     const { authenticated, setAuthenticated, userData, setUserData } = context;
     if (authenticated && userData.inRoom) {
         setLoaded(true);
@@ -36,10 +38,11 @@ const roomCheck = (cookies, setCookie, navigate, context, setLoaded) => {
                         return;
                     }
                 }
-                setAuthenticated(false);
                 setCookie('userUuid', '', { path: '/' });
                 navigate('/');
             })
+        } else {
+            navigate('/');
         }
     }
 }
@@ -55,43 +58,45 @@ function RoomPage() {
     });
 
     const handleLeave = () => {
-        axios.post('http://dev.test:3000/room/leave', {uuid: context.userData.uuid}).then(
-            navigate('/home')
-        ).catch(
-            navigate('/home')
-        )
+        axios.post('http://dev.test:3000/room/leave', {uuid: context.userData.uuid}).then((_) => {
+            navigate('/home');
+        }).catch((_) => {
+            navigate('/home');
+        });
     };
 
     return (
         !loaded ? <Fallback/> :
         <>
-            <Container className="p-1 mb-2 bg-light rounded-3">
-                <h4 className="Header">Room uuid: {context.userData.roomUuid}</h4>
-                <Button type="button" variant="warning" onClick={handleLeave} className="btn-lg">Leave&nbsp;room</Button>
+            <Container>
+                <Row>
+                    <InputGroup className="some-margin-bottom">
+                        <InputGroup.Text>
+                            Room uuid:
+                        </InputGroup.Text>
+                        <Button variant="secondary">Copy</Button>
+                        <Form.Control
+                            type="text"
+                            value={context.userData.roomUuid}
+                            placeholder={context.userData.roomUuid}
+                            aria-label={context.userData.roomUuid}
+                            aria-describedby="btnGroupAddon" readOnly={true}
+                        />
+                        <Button type="button" variant="warning" onClick={handleLeave} >Leave&nbsp;room</Button>
+                    </InputGroup>
+                </Row>
+                <Row>
+                    <Col className="text-center">
+                        <VideoForm owner={context.userData.roomAuthor}/>
+                    </Col>
+                    <Col className="text-center">
+                        <VideoForm owner={!context.userData.roomAuthor}/>
+                    </Col>
+                    <Col className="text-center">
+                        <ChatForm/>
+                    </Col>
+                </Row>
             </Container>
-            <Form>
-                <div className="card">
-                    <Container>
-                        <Row>
-                            <Col xs={3} className="text-center">
-                                <Button type="submit" variant="success" className="btn-lg">Create&nbsp;room</Button>
-                            </Col>
-                            <Col xs={1} className="text-center">
-                                <p className="some-pad-top">or</p>
-                            </Col>
-                            <Col xs={7} className="text-center">
-                                <Form.Control className="some-margin-top" type="text" name="roomId" id="roomId"></Form.Control>
-                            </Col>
-                            <Col xs={1}>
-                                <Button className="some-margin-top" type="submit" variant="primary">Join</Button>
-                            </Col>
-                        </Row>
-                    </Container>
-                </div>
-            </Form>
-            <p className="read-the-docs">
-                Create room or join existing one
-            </p>
         </>
     )
 }

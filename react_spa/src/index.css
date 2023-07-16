@@ -23,6 +23,30 @@ a:hover {
   color: #535bf2;
 }
 
+.some-margin-bottom {
+  margin-bottom: 1.5em;
+}
+
+.messages-window {
+  min-width: 400px;
+  height: 30vh;
+  max-height: 40vh;
+  overflow-y: scroll;
+  text-align: left;
+  font-size: 10pt;
+}
+
+.video-card-canvas {
+  width: 400px;
+  min-height: 360px;
+  margin-bottom: 1.5em;
+}
+
+.video-canvas {
+  width: 399px;
+  height: 300px;
+}
+
 body {
   margin: 0;
   display: flex;

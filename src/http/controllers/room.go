@@ -4,9 +4,9 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"macos-cam-grpc-chat/src/dto"
-	"macos-cam-grpc-chat/src/http/requests"
-	"macos-cam-grpc-chat/src/services"
+	"web-grpc-video-chat/src/dto"
+	"web-grpc-video-chat/src/http/requests"
+	"web-grpc-video-chat/src/services"
 )
 
 type RoomController struct {

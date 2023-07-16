@@ -3,8 +3,8 @@ package services
 import (
 	"errors"
 	"github.com/google/uuid"
-	"macos-cam-grpc-chat/src/dto"
 	"sync"
+	"web-grpc-video-chat/src/dto"
 )
 
 type RoomService struct {
@@ -110,6 +110,5 @@ func NewRoomService() *RoomService {
 		rooms:    make(map[uuid.UUID]*dto.Room),
 		asAuthor: make(map[uuid.UUID]*dto.Room),
 		asGuest:  make(map[uuid.UUID]*dto.Room),
-		mu:       sync.RWMutex{},
 	}
 }

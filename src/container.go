@@ -2,16 +2,18 @@ package src
 
 import (
 	"go.uber.org/dig"
-	"macos-cam-grpc-chat/src/http"
-	"macos-cam-grpc-chat/src/http/controllers"
-	"macos-cam-grpc-chat/src/http/middleware"
-	"macos-cam-grpc-chat/src/services"
+	"web-grpc-video-chat/src/chat"
+	"web-grpc-video-chat/src/http"
+	"web-grpc-video-chat/src/http/controllers"
+	"web-grpc-video-chat/src/http/middleware"
+	"web-grpc-video-chat/src/services"
 )
 
 func BuildContainer() *dig.Container {
 	container := dig.New()
 	processError(container.Provide(NewApplication))
 	processError(container.Provide(http.NewWebServer))
+	processError(container.Provide(chat.NewChatServiceServer))
 
 	processError(container.Provide(controllers.NewAuthController))
 	processError(container.Provide(controllers.NewRoomController))

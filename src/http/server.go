@@ -4,11 +4,11 @@ import (
 	"context"
 	"github.com/gin-gonic/gin"
 	"log"
-	"macos-cam-grpc-chat/src/http/controllers"
-	"macos-cam-grpc-chat/src/http/middleware"
 	"net/http"
 	"sync"
 	"time"
+	"web-grpc-video-chat/src/http/controllers"
+	"web-grpc-video-chat/src/http/middleware"
 )
 
 type WebServer struct {

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+option go_package = "web-grpc-video-chat/src/chat";
+
+service Chat {
+  rpc GetHistory(AuthRequest) returns (HistoryResponse);
+  rpc SendMessage(SendMessageRequest) returns (Empty);
+  rpc ListenRequest(AuthRequest) returns (stream ChatMessage);
+}
+
+message Empty {}
+
+message AuthRequest {
+  string UUID = 1;
+  string ChatUUID = 2;
+}
+
+message SendMessageRequest {
+  string Msg = 1;
+  AuthRequest AuthData = 2;
+}
+
+message ChatMessage {
+  string UUID = 1;
+  string UserUUID = 2;
+  string UserName = 3;
+  int64 Time = 4;
+  string Msg = 5;
+}
+
+message HistoryResponse {
+  repeated ChatMessage Messages = 1;
+}

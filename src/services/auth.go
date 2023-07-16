@@ -3,10 +3,10 @@ package services
 import (
 	"errors"
 	"github.com/google/uuid"
-	"macos-cam-grpc-chat/src/dto"
 	"math/rand"
 	"regexp"
 	"sync"
+	"web-grpc-video-chat/src/dto"
 )
 
 type AuthService struct {
@@ -64,5 +64,5 @@ func (a *AuthService) Logout(userUUID uuid.UUID) {
 }
 
 func NewAuthService() *AuthService {
-	return &AuthService{authUsers: make(map[uuid.UUID]*dto.User), mu: sync.RWMutex{}}
+	return &AuthService{authUsers: make(map[uuid.UUID]*dto.User)}
 }

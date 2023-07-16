@@ -3,7 +3,7 @@ import './App.css'
 import 'bootstrap/dist/css/bootstrap.min.css';
 import {
     BrowserRouter,
-    Routes, Route, Link
+    Routes, Route
 } from "react-router-dom"
 import {Button, Container} from "react-bootstrap";
 import AuthForm from "./components/auth-form/AuthForm";
@@ -24,8 +24,8 @@ const defaultUserContext = {
 export const UserContext = createContext({
     authenticated: false,
     userData: defaultUserContext,
-    setAuthenticated: (value) => {},
-    setUserData: (obj) => {},
+    setAuthenticated: (value: boolean) => { console.log(value) },
+    setUserData: (obj: any) => { console.log(obj) },
 });
 
 
@@ -75,8 +75,16 @@ function App() {
     );
 }
 
-export const useAuth = (page: string, redirect: boolean, cookies, setCookie, navigate, context, setLoaded) => {
-    const { authenticated, setAuthenticated, userData, setUserData } = context;
+export const useAuth = (
+    page: string,
+    redirect: boolean,
+    cookies: any,
+    setCookie: any,
+    navigate: any,
+    context: any,
+    setLoaded: any,
+) => {
+    const { authenticated, setAuthenticated, setUserData } = context;
     if (authenticated) {
         if (redirect) {
             navigate(page);
@@ -107,6 +115,7 @@ export const useAuth = (page: string, redirect: boolean, cookies, setCookie, nav
                 }
             ).catch(
                 (reason) => {
+                    console.log(reason)
                     setCookie('userUuid', '', { path: '/' });
                     navigate('/')
                 }
@@ -151,7 +160,7 @@ export function Fallback() {
 }
 
 export function Logout() {
-    const [cookies, setCookie] = useCookies(['userUuid']);
+    const [_, setCookie] = useCookies(['userUuid']);
     const navigate = useNavigate();
     const context = useContext(UserContext);
 
