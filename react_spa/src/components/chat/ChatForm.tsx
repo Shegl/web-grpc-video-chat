@@ -2,15 +2,14 @@ import { useContext, useEffect, useState } from 'react';
 import { Button, Card, Col, Form, Row, ListGroup, ListGroupItem } from "react-bootstrap";
 import { UserContext } from "../../App";
 import { ChatClient } from "../../ChatServiceClientPb";
-import {AuthRequest, ChatMessage} from "../../chat_pb";
+import { AuthRequest, ChatMessage } from "../../chat_pb.d.ts";
 
 const ChatForm = () => {
     const client = new ChatClient("http://localhost:8080", null, null);
     const { userData } = useContext(UserContext);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-    const authRequest = new AuthRequest();
-    console.log(authRequest.toString());
+    let authRequest : AuthRequest = new AuthRequest()
     authRequest.setUuid(userData.uuid);
     authRequest.setChatuuid(userData.roomUuid);
 
