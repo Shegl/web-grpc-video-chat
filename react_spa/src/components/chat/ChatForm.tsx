@@ -1,25 +1,34 @@
 import { useContext, useEffect, useState } from 'react';
 import { Button, Card, Col, Form, Row, ListGroup, ListGroupItem } from "react-bootstrap";
 import { UserContext } from "../../App";
-import { ChatClient } from "../../ChatServiceClientPb";
-import { AuthRequest, ChatMessage } from "../../chat_pb.d.ts";
+import { ChatClient } from "../../chat.client";
+import { AuthRequest, ChatMessage, HistoryResponse} from "../../chat";
+import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
 
 const ChatForm = () => {
-    const client = new ChatClient("http://localhost:8080", null, null);
     const { userData } = useContext(UserContext);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-    let authRequest : AuthRequest = new AuthRequest()
-    authRequest.setUuid(userData.uuid);
-    authRequest.setChatuuid(userData.roomUuid);
+    let transport = new GrpcWebFetchTransport({
+        baseUrl: `http://localhost:8080`
+    });
+
+    let client = new ChatClient(transport);
+
+    const authRequest : AuthRequest = {
+        uUID: userData.uuid,
+        chatUUID: userData.roomUuid
+    };
+
+    const updateChat = async () => {
+        const {response} = await client.getHistory(authRequest);
+        response.messages.map((msg) => {
+            setMessages(prevMessages => [...prevMessages, msg])
+        })
+    }
 
     useEffect(() => {
-        client.getHistory(authRequest, null, (err, response) => {
-            if (err) return console.log(err);
-            response.getMessagesList().map(msg => {
-                setMessages(prevMessages => [...prevMessages, msg]);
-            })
-        });
+        updateChat().then().catch()
     });
 
     return (

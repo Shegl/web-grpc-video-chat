@@ -7,4 +7,7 @@ export default defineConfig({
     host: 'dev.test'
   },
   plugins: [react()],
+  optimizeDeps: {
+    include: ["chat"],
+  },
 })
