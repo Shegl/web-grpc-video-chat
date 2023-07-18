@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import { Button, Card, Col, Form, Row, ListGroup, ListGroupItem } from "react-bootstrap";
 import { UserContext } from "../../App";
 import { ChatClient } from "../../chat.client";
-import { AuthRequest, ChatMessage, HistoryResponse} from "../../chat";
+import { AuthRequest, ChatMessage } from "../../chat";
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
 
 const ChatForm = () => {
@@ -10,7 +10,7 @@ const ChatForm = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
 
     let transport = new GrpcWebFetchTransport({
-        baseUrl: `http://localhost:8080`
+        baseUrl: `https://localhost`
     });
 
     let client = new ChatClient(transport);
@@ -22,6 +22,7 @@ const ChatForm = () => {
 
     const updateChat = async () => {
         const {response} = await client.getHistory(authRequest);
+        console.log(response);
         response.messages.map((msg) => {
             setMessages(prevMessages => [...prevMessages, msg])
         })

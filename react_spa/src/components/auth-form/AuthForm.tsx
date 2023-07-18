@@ -20,7 +20,7 @@ const AuthForm = () => {
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         try {
-            const response = await axios.post('http://dev.test:3000/auth', formData);
+            const response = await axios.post('https://localhost/auth', formData);
             if (response.data.username && response.data.uuid) {
 
                 userData.username = response.data.username;

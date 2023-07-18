@@ -1,0 +1,32 @@
+version: '3'
+
+services:
+  envoy:
+    build: docker/envoy
+    ports:
+      - '443:443'
+    volumes:
+      - ./docker/envoy:/etc/envoy
+      - ./docker/certs:/etc/envoy/ssl
+    depends_on:
+      - app
+    networks:
+      - net
+  app:
+    command: go run cmd/main.go
+    image: golang:1.20.5-buster
+    ports:
+      - '3000:3000'
+      - '3001:3001'
+      - '30010:30010'
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - ./docker/certs:/app/certs
+    environment:
+      GOPATH: /
+    networks:
+      - net
+networks:
+  net:
+    driver: bridge

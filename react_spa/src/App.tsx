@@ -94,7 +94,7 @@ export const useAuth = (
     } else {
         let userUUID = cookies.userUuid;
         if (userUUID) {
-            axios.post('http://dev.test:3000/check', {uuid: userUUID}).then(
+            axios.post('https://localhost/check', {uuid: userUUID}).then(
                 (response) => {
                     if (response.status == 200) {
                         setAuthenticated(true);
@@ -169,7 +169,7 @@ export function Logout() {
         context.setUserData(defaultUserContext);
         context.setAuthenticated(false);
 
-        axios.post('http://dev.test:3000/logout', {uuid: context.userData.uuid}).then().catch()
+        axios.post('https://localhost/logout', {uuid: context.userData.uuid}).then().catch()
 
         navigate('/');
     }

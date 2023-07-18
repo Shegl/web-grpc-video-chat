@@ -1,3 +1,5 @@
+export CGO_ENABLED=0
+
 protos:
 	protoc --go_out=src/chat --go_opt=paths=source_relative \
         --go-grpc_out=src/chat --go-grpc_opt=paths=source_relative chat.proto
@@ -8,3 +10,9 @@ protos-web:
 		--plugin=protoc-gen-ts=./react_spa/node_modules/.bin/protoc-gen-ts \
 		-I . \
 		  chat.proto
+
+gen-cert:
+	cd docker/certs && ./gencert.sh
+
+compose-up:
+	docker compose up --attach app

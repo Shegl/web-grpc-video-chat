@@ -14,7 +14,7 @@ const roomCheck = (cookies: any, setCookie: any, navigate: any, context: any, se
     } else {
         let userUUID = cookies.userUuid;
         if (userUUID) {
-            axios.post('http://dev.test:3000/room/state', {uuid: userUUID}).then(
+            axios.post('https://localhost/room/state', {uuid: userUUID}).then(
                 (response) => {
                     if (response.status == 200) {
                         let userData = context.userData;

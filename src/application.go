@@ -2,7 +2,6 @@ package src
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -38,16 +37,16 @@ func (a *Application) Init(version string) error {
 	)
 
 	a.chatServer.Init(
-		":8080",
+		":3001",
 		&a.wg,
 	)
 
-	fmt.Println("application:: Init() :: init complete")
+	log.Println("application:: Init() :: init complete")
 	return nil
 }
 
 func (a *Application) Run(ctx context.Context) {
-	fmt.Println("application:: Run() :: starting")
+	log.Println("application:: Run() :: starting")
 	cancelCtx, cancelFunc := context.WithCancel(ctx)
 	a.processSignals(cancelFunc)
 
@@ -61,10 +60,10 @@ func (a *Application) Run(ctx context.Context) {
 		panic(err)
 	}
 
-	fmt.Println("application:: Run() :: running")
+	log.Println("application:: Run() :: running")
 	a.wg.Wait()
 
-	fmt.Println("application:: Run() :: graceful shutdown")
+	log.Println("application:: Run() :: graceful shutdown")
 }
 
 func (a *Application) processSignals(cancelFunc context.CancelFunc) {

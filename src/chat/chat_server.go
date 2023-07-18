@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"log"
@@ -46,6 +47,7 @@ func (s *ChatServiceServer) Run(ctx context.Context) {
 
 	log.Println("ChatServiceServer:: starting")
 
+	// we create grpc without tsl, envoy will terminate it
 	grpcServer := grpc.NewServer()
 	RegisterChatServer(grpcServer, s)
 
@@ -54,8 +56,9 @@ func (s *ChatServiceServer) Run(ctx context.Context) {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
+	// serve normal grpc
 	go grpcServer.Serve(ln)
-	log.Println("ChatServiceServer:: started")
+	log.Println("ChatServiceServer:: grpc started")
 
 	go func() {
 		defer s.wg.Done()
@@ -72,6 +75,7 @@ func (s *ChatServiceServer) GetHistory(ctx context.Context, request *AuthRequest
 	// we must check User and Room permissions
 	_, room, err := s.userAndRoom(request.GetUUID(), request.GetChatUUID())
 	if err != nil {
+		fmt.Println("error on fetching user and room")
 		return nil, err
 	}
 	return &HistoryResponse{
@@ -164,9 +168,15 @@ func (s *ChatServiceServer) getChat(room *dto.Room) *ChatLog {
 		return chatLog
 	}
 	chatLog := &ChatLog{
-		room:     room,
-		messages: []*ChatMessage{},
-		msgChan:  make(chan *ChatMessage, 4),
+		room: room,
+		messages: []*ChatMessage{{
+			UUID:     "ajskdhfkjahsdf",
+			UserUUID: "asldfjhlasjdf",
+			UserName: "Bot",
+			Time:     0,
+			Msg:      "Welcome to chat",
+		}},
+		msgChan: make(chan *ChatMessage, 4),
 	}
 	go func() {
 		for {

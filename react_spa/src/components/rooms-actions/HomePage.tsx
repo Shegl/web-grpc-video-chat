@@ -18,7 +18,7 @@ function HomePage() {
     const handleClickCreateRoom = async () => {
         setLoaded(false)
         try {
-            const response = await axios.post('http://dev.test:3000/room/make', { uuid: context.userData.uuid});
+            const response = await axios.post('https://localhost/room/make', { uuid: context.userData.uuid});
             if (response.data) {
                 if (response.data.state > 0) {
                     let userData = context.userData
