@@ -60,6 +60,7 @@ static_resources:
                 filename: /etc/envoy/ssl/localhost.pem
               private_key:
                 filename: /etc/envoy/ssl/localhost.key
+            alpn_protocols: [ "h2,http/1.1" ]
   clusters:
   - name: chat_service
     connect_timeout: 0.25s

@@ -20,7 +20,7 @@ const VideoForm = (props: {owner: boolean;}) => {
                     alert(`Following error occured: ${err}`);
                 });
         }
-    },[videoElement]);
+    },[userData]);
 
     return (
         <>

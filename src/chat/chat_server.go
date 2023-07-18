@@ -170,9 +170,9 @@ func (s *ChatServiceServer) getChat(room *dto.Room) *ChatLog {
 	chatLog := &ChatLog{
 		room: room,
 		messages: []*ChatMessage{{
-			UUID:     "ajskdhfkjahsdf",
-			UserUUID: "asldfjhlasjdf",
-			UserName: "Bot",
+			UUID:     uuid.NewString(),
+			UserUUID: uuid.NewString(),
+			UserName: "Server",
 			Time:     0,
 			Msg:      "Welcome to chat",
 		}},

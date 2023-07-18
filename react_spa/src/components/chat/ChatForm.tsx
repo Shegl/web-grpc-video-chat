@@ -22,15 +22,19 @@ const ChatForm = () => {
 
     const updateChat = async () => {
         const {response} = await client.getHistory(authRequest);
-        console.log(response);
         response.messages.map((msg) => {
-            setMessages(prevMessages => [...prevMessages, msg])
-        })
+            setMessages((prevMessages) => {
+                if (!prevMessages.some(messageItem => msg.uUID == messageItem.uUID)) {
+                    return [...prevMessages, msg]
+                }
+                return prevMessages
+            })
+        });
     }
 
     useEffect(() => {
         updateChat().then().catch()
-    });
+    }, [userData]);
 
     return (
         <>
@@ -40,7 +44,9 @@ const ChatForm = () => {
                 </Card.Header>
                 <ListGroup className="messages-window" variant="flush">
                     {messages.map(message => (
-                        <ListGroupItem>{message.toString()}</ListGroupItem>
+                        <ListGroupItem key={message.uUID}>
+                            <strong>{ message.userName }{ message.userUUID == userData.uuid ? "(You)" : "" }</strong>
+                        : {message.msg}</ListGroupItem>
                     ))}
                 </ListGroup>
                 <Card.Footer>
