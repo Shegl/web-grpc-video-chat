@@ -11,13 +11,13 @@ const VideoForm = (props: {owner: boolean;}) => {
         if (owner) {
             navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                 .then(stream => {
-                    if (videoElement.current?.srcObject) {
+                    if (videoElement.current) {
                         videoElement.current.srcObject = stream;
                         videoElement.current.play();
                     }
                 })
                 .catch(err => {
-                    alert(`Following error occured: ${err}`);
+                    // alert(`Following error occured: ${err}`);
                 });
         }
     },[userData]);

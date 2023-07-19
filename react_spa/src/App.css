@@ -23,6 +23,11 @@
   }
 }
 
+.lastChatElem {
+  clear: both;
+  padding-bottom: 20px;
+}
+
 .card-2 {
   padding: 2em;
   margin-bottom: 1.5em;

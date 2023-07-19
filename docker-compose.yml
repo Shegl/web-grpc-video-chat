@@ -18,7 +18,6 @@ services:
     ports:
       - '3000:3000'
       - '3001:3001'
-      - '30010:30010'
     working_dir: /app
     volumes:
       - ./:/app
