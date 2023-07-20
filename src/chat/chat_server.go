@@ -112,7 +112,7 @@ func (s *ChatServiceServer) ListenRequest(request *AuthRequest, stream Chat_List
 	}
 	chat := s.getChat(room)
 	chat.mu.Lock()
-	if user == room.Author {
+	if user.UUID == room.Author.UUID {
 		chat.authorStream = stream
 	} else {
 		chat.guestStream = stream
@@ -189,7 +189,7 @@ func (s *ChatServiceServer) getChat(room *dto.Room) *ChatLog {
 				chatLog.authorStream.Send(message)
 			}
 			if chatLog.guestStream != nil {
-				chatLog.authorStream.Send(message)
+				chatLog.guestStream.Send(message)
 			}
 		}
 	}()

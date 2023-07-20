@@ -1,19 +1,22 @@
-import { useContext, useEffect, useState } from 'react';
+import { ChangeEvent, useContext, useEffect, useState} from 'react';
 import { Fallback, Logout, useAuth, UserContext } from "../../App";
-import { Button, Col, Container, Form, Row } from "react-bootstrap";
+import { Alert, Button, Col, Container, Form, Row } from "react-bootstrap";
 import { useCookies } from "react-cookie";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from "axios";
 
 function HomePage() {
     const [loaded, setLoaded] = useState(false);
     const context = useContext(UserContext);
     const [cookies, setCookie] = useCookies(['userUuid']);
+    const [roomIdToJoin, setRoomIdToJoin] = useState("")
     const navigate = useNavigate();
+    const location = useLocation();
+    const stateData = (location.state as { message: string })?.message || '';
 
     useEffect(() => {
         useAuth("/home", false, cookies, setCookie, navigate, context, setLoaded);
-    });
+    }, []);
 
     const handleClickCreateRoom = async () => {
         setLoaded(false)
@@ -21,12 +24,7 @@ function HomePage() {
             const response = await axios.post('https://localhost/room/make', { uuid: context.userData.uuid});
             if (response.data) {
                 if (response.data.state > 0) {
-                    let userData = context.userData
-                    userData.inRoom = true;
-                    userData.roomAuthor = response.data.author.uuid == context.userData.uuid
-                    userData.roomUuid = response.data.uuid
-                    context.setUserData(userData)
-                    navigate('/room');
+                    connectRoom(response)
                 } else {
                     navigate('/home', { state: { message: 'Failed to create room' } });
                 }
@@ -38,9 +36,35 @@ function HomePage() {
         }
     };
 
-    const handleClickJoinRoomHandle = () => {
-        setLoaded(false)
+    const handleRoomJoinChange = (e: ChangeEvent<HTMLInputElement>) => {
+        setRoomIdToJoin(e.target.value);
     };
+
+    const handleClickJoinRoom = () => {
+        axios.post('https://localhost/room/join', {
+            uuid: context.userData.uuid,
+            room_uuid: roomIdToJoin
+        }).then((response) => {
+            if (response.status == 200) {
+                connectRoom(response)
+            }
+        }).catch((error) => {
+            if (error.response && error.response.status == 422) {
+                navigate('/home', { state: { message: 'Failed to join room: ' + error.response.data } });
+            } else {
+                navigate('/home', { state: { message: 'Unhandled error: '} });
+            }
+        })
+    };
+
+    const connectRoom = (roomResponse) => {
+        let userData = context.userData
+        userData.inRoom = true;
+        userData.roomAuthor = roomResponse.data.author.uuid == context.userData.uuid
+        userData.roomUuid = roomResponse.data.uuid
+        context.setUserData(userData)
+        navigate('/room');
+    }
 
     return (
         !loaded ? <Fallback/> :
@@ -48,6 +72,9 @@ function HomePage() {
             <Container className="p-5 mb-4 bg-light rounded-3">
                 <h1 className="Header">React/Golang WebChat demo</h1>
             </Container>
+            { stateData != '' ? <Alert key="warning" variant="warning">
+                { stateData }
+             </Alert> : <></>}
             <h3>Hello, {context.userData.username} <Logout/></h3>
             <Form>
                 <div className="card card-2">
@@ -60,10 +87,10 @@ function HomePage() {
                                 <p className="some-pad-top">or</p>
                             </Col>
                             <Col xs={7} className="text-center">
-                                <Form.Control placeholder="Enter room UUID..." className="some-margin-top" type="text" name="roomId" id="roomId"></Form.Control>
+                                <Form.Control placeholder="Enter room UUID..." onChange={handleRoomJoinChange} className="some-margin-top" type="text" name="roomId" id="roomId"/>
                             </Col>
                             <Col xs={1}>
-                                <Button className="some-margin-top" type="button" variant="primary" onClick={handleClickJoinRoomHandle} >Join</Button>
+                                <Button className="some-margin-top" type="button" variant="primary" onClick={handleClickJoinRoom}>Join</Button>
                             </Col>
                         </Row>
                     </Container>

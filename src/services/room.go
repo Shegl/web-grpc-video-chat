@@ -37,7 +37,7 @@ func (r *RoomService) create(user *dto.User) *dto.Room {
 		Author: user,
 		Guest:  nil,
 	}
-	r.rooms[user.UUID] = room
+	r.rooms[room.UUID] = room
 	r.asAuthor[user.UUID] = room
 	return room
 }
@@ -49,14 +49,19 @@ func (r *RoomService) Join(roomUUID uuid.UUID, user *dto.User) (*dto.Room, error
 		// room exists, good. Is it occupied?
 		if room.Guest == nil && room.Author != user {
 			return r.join(roomUUID, user), nil
-		} else if room.Guest == user {
+		}
+		if room.Guest == user {
 			// same user, its counter as rejoin
 			return room, nil
-		} else if room.Author == user {
-			return nil, errors.New("User cant join as guest to his room. ")
-		} else {
-			return nil, errors.New("Room occupied. ")
 		}
+		// error handling
+		var err error
+		if room.Author == user {
+			err = errors.New("User cant join as guest to his room. ")
+		} else {
+			err = errors.New("Room occupied. ")
+		}
+		return nil, err
 	}
 	return nil, errors.New("Room not exists. ")
 }
@@ -64,6 +69,7 @@ func (r *RoomService) Join(roomUUID uuid.UUID, user *dto.User) (*dto.Room, error
 func (r *RoomService) join(roomUUID uuid.UUID, user *dto.User) *dto.Room {
 	if room, exists := r.rooms[roomUUID]; exists {
 		room.Guest = user
+		r.asGuest[user.UUID] = room
 		return room
 	}
 	return nil
