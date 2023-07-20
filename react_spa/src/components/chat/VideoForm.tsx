@@ -7,13 +7,21 @@ const VideoForm = (props: {owner: boolean;}) => {
     const { userData } = useContext(UserContext);
     const videoElement = useRef<HTMLVideoElement>(null);
 
+    const captureAndSend = async (stream) => {
+        let videoTrack = stream.getVideoTracks()[0];
+        const blob = await videoTrack.captureFrame();
+    }
+
     useEffect(() => {
         if (owner) {
-            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
                 .then(stream => {
                     if (videoElement.current) {
                         videoElement.current.srcObject = stream;
-                        videoElement.current.play();
+                        videoElement.current.play().then(() => {
+                            // lets send stream to server
+
+                        });
                     }
                 })
                 .catch(err => {

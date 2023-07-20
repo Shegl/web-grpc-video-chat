@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+option go_package = "web-grpc-video-chat/src/streams";
+
+service Stream {
+  rpc StreamState(stream User) returns (stream StateMessage);
+  rpc AVStream(stream AVFrameData) returns (stream AVFrameData);
+}
+
+message StateMessage {
+  int64 Time = 1;
+  string UUID = 2;
+  User Author = 3;
+  User Guest = 4;
+}
+
+message User {
+  bool IsCamEnabled = 1;
+  bool IsMuted = 2;
+  string UserUUID = 3;
+  string UserName = 4;
+}
+
+message AVFrameData {
+  string UserUUID = 1;
+  bytes FrameData = 2;
+}

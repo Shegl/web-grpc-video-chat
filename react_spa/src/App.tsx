@@ -7,11 +7,11 @@ import {
 } from "react-router-dom"
 import {Button, Container} from "react-bootstrap";
 import AuthForm from "./components/auth-form/AuthForm";
-import HomePage from "./components/rooms-actions/HomePage";
+import HomePage from "./components/room/HomePage";
 import { useCookies } from "react-cookie";
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import RoomPage from "./components/rooms-actions/RoomPage";
+import RoomPage from "./components/room/RoomPage";
 
 const defaultUserContext = {
     username: 'Anonymous',

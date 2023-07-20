@@ -47,7 +47,7 @@ func (s *ChatServiceServer) Run(ctx context.Context) {
 
 	log.Println("ChatServiceServer:: starting")
 
-	// we create grpc without tsl, envoy will terminate it
+	// we create grpc without tls, envoy will terminate it
 	grpcServer := grpc.NewServer()
 	RegisterChatServer(grpcServer, s)
 
