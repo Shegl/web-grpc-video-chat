@@ -5,23 +5,29 @@ import type { RpcTransport } from "@protobuf-ts/runtime-rpc";
 import type { ServiceInfo } from "@protobuf-ts/runtime-rpc";
 import { Stream } from "./stream";
 import type { AVFrameData } from "./stream";
+import type { Empty } from "./stream";
+import type { UnaryCall } from "@protobuf-ts/runtime-rpc";
 import { stackIntercept } from "@protobuf-ts/runtime-rpc";
 import type { StateMessage } from "./stream";
 import type { User } from "./stream";
-import type { DuplexStreamingCall } from "@protobuf-ts/runtime-rpc";
+import type { ServerStreamingCall } from "@protobuf-ts/runtime-rpc";
 import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
 /**
  * @generated from protobuf service Stream
  */
 export interface IStreamClient {
     /**
-     * @generated from protobuf rpc: StreamState(stream User) returns (stream StateMessage);
+     * @generated from protobuf rpc: StreamState(User) returns (stream StateMessage);
      */
-    streamState(options?: RpcOptions): DuplexStreamingCall<User, StateMessage>;
+    streamState(input: User, options?: RpcOptions): ServerStreamingCall<User, StateMessage>;
     /**
-     * @generated from protobuf rpc: AVStream(stream AVFrameData) returns (stream AVFrameData);
+     * @generated from protobuf rpc: ChangeState(User) returns (Empty);
      */
-    aVStream(options?: RpcOptions): DuplexStreamingCall<AVFrameData, AVFrameData>;
+    changeState(input: User, options?: RpcOptions): UnaryCall<User, Empty>;
+    /**
+     * @generated from protobuf rpc: AVStream(User) returns (stream AVFrameData);
+     */
+    aVStream(input: User, options?: RpcOptions): ServerStreamingCall<User, AVFrameData>;
 }
 /**
  * @generated from protobuf service Stream
@@ -33,17 +39,24 @@ export class StreamClient implements IStreamClient, ServiceInfo {
     constructor(private readonly _transport: RpcTransport) {
     }
     /**
-     * @generated from protobuf rpc: StreamState(stream User) returns (stream StateMessage);
+     * @generated from protobuf rpc: StreamState(User) returns (stream StateMessage);
      */
-    streamState(options?: RpcOptions): DuplexStreamingCall<User, StateMessage> {
+    streamState(input: User, options?: RpcOptions): ServerStreamingCall<User, StateMessage> {
         const method = this.methods[0], opt = this._transport.mergeOptions(options);
-        return stackIntercept<User, StateMessage>("duplex", this._transport, method, opt);
+        return stackIntercept<User, StateMessage>("serverStreaming", this._transport, method, opt, input);
     }
     /**
-     * @generated from protobuf rpc: AVStream(stream AVFrameData) returns (stream AVFrameData);
+     * @generated from protobuf rpc: ChangeState(User) returns (Empty);
      */
-    aVStream(options?: RpcOptions): DuplexStreamingCall<AVFrameData, AVFrameData> {
+    changeState(input: User, options?: RpcOptions): UnaryCall<User, Empty> {
         const method = this.methods[1], opt = this._transport.mergeOptions(options);
-        return stackIntercept<AVFrameData, AVFrameData>("duplex", this._transport, method, opt);
+        return stackIntercept<User, Empty>("unary", this._transport, method, opt, input);
+    }
+    /**
+     * @generated from protobuf rpc: AVStream(User) returns (stream AVFrameData);
+     */
+    aVStream(input: User, options?: RpcOptions): ServerStreamingCall<User, AVFrameData> {
+        const method = this.methods[2], opt = this._transport.mergeOptions(options);
+        return stackIntercept<User, AVFrameData>("serverStreaming", this._transport, method, opt, input);
     }
 }

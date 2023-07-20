@@ -3,9 +3,12 @@ syntax = "proto3";
 option go_package = "web-grpc-video-chat/src/streams";
 
 service Stream {
-  rpc StreamState(stream User) returns (stream StateMessage);
-  rpc AVStream(stream AVFrameData) returns (stream AVFrameData);
+  rpc StreamState(User) returns (stream StateMessage);
+  rpc ChangeState(User) returns (Empty);
+  rpc AVStream(User) returns (stream AVFrameData);
 }
+
+message Empty {}
 
 message StateMessage {
   int64 Time = 1;

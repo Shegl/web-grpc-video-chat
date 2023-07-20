@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 
 const (
 	Stream_StreamState_FullMethodName = "/Stream/StreamState"
+	Stream_ChangeState_FullMethodName = "/Stream/ChangeState"
 	Stream_AVStream_FullMethodName    = "/Stream/AVStream"
 )
 
@@ -27,8 +28,9 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StreamClient interface {
-	StreamState(ctx context.Context, opts ...grpc.CallOption) (Stream_StreamStateClient, error)
-	AVStream(ctx context.Context, opts ...grpc.CallOption) (Stream_AVStreamClient, error)
+	StreamState(ctx context.Context, in *User, opts ...grpc.CallOption) (Stream_StreamStateClient, error)
+	ChangeState(ctx context.Context, in *User, opts ...grpc.CallOption) (*Empty, error)
+	AVStream(ctx context.Context, in *User, opts ...grpc.CallOption) (Stream_AVStreamClient, error)
 }
 
 type streamClient struct {
@@ -39,27 +41,28 @@ func NewStreamClient(cc grpc.ClientConnInterface) StreamClient {
 	return &streamClient{cc}
 }
 
-func (c *streamClient) StreamState(ctx context.Context, opts ...grpc.CallOption) (Stream_StreamStateClient, error) {
+func (c *streamClient) StreamState(ctx context.Context, in *User, opts ...grpc.CallOption) (Stream_StreamStateClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Stream_ServiceDesc.Streams[0], Stream_StreamState_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
 	x := &streamStreamStateClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
 	return x, nil
 }
 
 type Stream_StreamStateClient interface {
-	Send(*User) error
 	Recv() (*StateMessage, error)
 	grpc.ClientStream
 }
 
 type streamStreamStateClient struct {
 	grpc.ClientStream
-}
-
-func (x *streamStreamStateClient) Send(m *User) error {
-	return x.ClientStream.SendMsg(m)
 }
 
 func (x *streamStreamStateClient) Recv() (*StateMessage, error) {
@@ -70,27 +73,37 @@ func (x *streamStreamStateClient) Recv() (*StateMessage, error) {
 	return m, nil
 }
 
-func (c *streamClient) AVStream(ctx context.Context, opts ...grpc.CallOption) (Stream_AVStreamClient, error) {
+func (c *streamClient) ChangeState(ctx context.Context, in *User, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Stream_ChangeState_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamClient) AVStream(ctx context.Context, in *User, opts ...grpc.CallOption) (Stream_AVStreamClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Stream_ServiceDesc.Streams[1], Stream_AVStream_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
 	x := &streamAVStreamClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
 	return x, nil
 }
 
 type Stream_AVStreamClient interface {
-	Send(*AVFrameData) error
 	Recv() (*AVFrameData, error)
 	grpc.ClientStream
 }
 
 type streamAVStreamClient struct {
 	grpc.ClientStream
-}
-
-func (x *streamAVStreamClient) Send(m *AVFrameData) error {
-	return x.ClientStream.SendMsg(m)
 }
 
 func (x *streamAVStreamClient) Recv() (*AVFrameData, error) {
@@ -105,8 +118,9 @@ func (x *streamAVStreamClient) Recv() (*AVFrameData, error) {
 // All implementations must embed UnimplementedStreamServer
 // for forward compatibility
 type StreamServer interface {
-	StreamState(Stream_StreamStateServer) error
-	AVStream(Stream_AVStreamServer) error
+	StreamState(*User, Stream_StreamStateServer) error
+	ChangeState(context.Context, *User) (*Empty, error)
+	AVStream(*User, Stream_AVStreamServer) error
 	mustEmbedUnimplementedStreamServer()
 }
 
@@ -114,10 +128,13 @@ type StreamServer interface {
 type UnimplementedStreamServer struct {
 }
 
-func (UnimplementedStreamServer) StreamState(Stream_StreamStateServer) error {
+func (UnimplementedStreamServer) StreamState(*User, Stream_StreamStateServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamState not implemented")
 }
-func (UnimplementedStreamServer) AVStream(Stream_AVStreamServer) error {
+func (UnimplementedStreamServer) ChangeState(context.Context, *User) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChangeState not implemented")
+}
+func (UnimplementedStreamServer) AVStream(*User, Stream_AVStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method AVStream not implemented")
 }
 func (UnimplementedStreamServer) mustEmbedUnimplementedStreamServer() {}
@@ -134,12 +151,15 @@ func RegisterStreamServer(s grpc.ServiceRegistrar, srv StreamServer) {
 }
 
 func _Stream_StreamState_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(StreamServer).StreamState(&streamStreamStateServer{stream})
+	m := new(User)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamServer).StreamState(m, &streamStreamStateServer{stream})
 }
 
 type Stream_StreamStateServer interface {
 	Send(*StateMessage) error
-	Recv() (*User, error)
 	grpc.ServerStream
 }
 
@@ -151,21 +171,34 @@ func (x *streamStreamStateServer) Send(m *StateMessage) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *streamStreamStateServer) Recv() (*User, error) {
-	m := new(User)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _Stream_ChangeState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(User)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(StreamServer).ChangeState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Stream_ChangeState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamServer).ChangeState(ctx, req.(*User))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Stream_AVStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(StreamServer).AVStream(&streamAVStreamServer{stream})
+	m := new(User)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamServer).AVStream(m, &streamAVStreamServer{stream})
 }
 
 type Stream_AVStreamServer interface {
 	Send(*AVFrameData) error
-	Recv() (*AVFrameData, error)
 	grpc.ServerStream
 }
 
@@ -177,33 +210,28 @@ func (x *streamAVStreamServer) Send(m *AVFrameData) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *streamAVStreamServer) Recv() (*AVFrameData, error) {
-	m := new(AVFrameData)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 // Stream_ServiceDesc is the grpc.ServiceDesc for Stream service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Stream_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "Stream",
 	HandlerType: (*StreamServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ChangeState",
+			Handler:    _Stream_ChangeState_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "StreamState",
 			Handler:       _Stream_StreamState_Handler,
 			ServerStreams: true,
-			ClientStreams: true,
 		},
 		{
 			StreamName:    "AVStream",
 			Handler:       _Stream_AVStream_Handler,
 			ServerStreams: true,
-			ClientStreams: true,
 		},
 	},
 	Metadata: "stream.proto",
