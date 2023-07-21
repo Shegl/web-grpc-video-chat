@@ -22,19 +22,19 @@ var PingPacket = []byte{0x50, 0x49, 0x4e, 0x47}
 var PongPacket = []byte{0x50, 0x4f, 0x4e, 0x47}
 var DataPacket = []byte{0x44, 0x41, 0x54, 0x41}
 
-type StreamState struct {
+type RoomStreamState struct {
 	room *dto.Room
 	mu   sync.RWMutex
 
-	authorState       *User
-	guestState        *User
-	authorStateServer Stream_StreamStateServer
-	guestStateServer  Stream_StreamStateServer
+	author *UserStreamState
+	guest  *UserStreamState
+}
 
-	authorStream       *websocket.Conn
-	guestStream        *websocket.Conn
-	authorStreamServer Stream_AVStreamServer
-	guestStreamServer  Stream_AVStreamServer
+type UserStreamState struct {
+	state        *User
+	stream       *websocket.Conn
+	stateServer  Stream_StreamStateServer
+	streamServer Stream_AVStreamServer
 }
 
 // StreamServiceServer : we will use websockets to accept stream from user
@@ -48,7 +48,7 @@ type StreamServiceServer struct {
 
 	wg           *sync.WaitGroup
 	mu           sync.RWMutex
-	streamStates map[uuid.UUID]*StreamState
+	streamStates map[uuid.UUID]*RoomStreamState
 }
 
 func (s *StreamServiceServer) Init(addr string, wg *sync.WaitGroup) error {
@@ -72,7 +72,7 @@ func (s *StreamServiceServer) Run(ctx context.Context) error {
 		return errors.New(fmt.Sprintf("StreamServiceServer:: [grpc] failed to listen: %v", err))
 	}
 
-	// serve normal grpc
+	// gRPC serve
 	go func() {
 		err = grpcServer.Serve(ln)
 		if err != nil {
@@ -88,6 +88,8 @@ func (s *StreamServiceServer) Run(ctx context.Context) error {
 		Addr:    s.addr + "0",
 		Handler: mux,
 	}
+
+	// Websockets listen and server
 	go func() {
 		err = server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
@@ -97,9 +99,12 @@ func (s *StreamServiceServer) Run(ctx context.Context) error {
 
 	log.Println("StreamServiceServer:: [ws] started")
 
+	// shutdown handler
 	go func() {
 		defer s.wg.Done()
+
 		<-ctx.Done()
+
 		shutdownContext, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 		err = server.Shutdown(shutdownContext)
@@ -109,6 +114,7 @@ func (s *StreamServiceServer) Run(ctx context.Context) error {
 		grpcServer.Stop()
 		log.Println("StreamServiceServer:: shutdown complete")
 	}()
+
 	return nil
 }
 
@@ -117,22 +123,21 @@ func (s *StreamServiceServer) StreamState(userRequest *User, stream Stream_Strea
 	if err != nil {
 		return err
 	}
-	room := s.roomService.State(user)
-	if room != nil {
-		state := s.getState(room)
-		state.mu.Lock()
-		if room.Author == user {
-			state.authorState = userRequest
-			state.authorStateServer = stream
-		} else {
-			state.guestState = userRequest
-			state.authorStateServer = stream
-		}
-		state.mu.Unlock()
-		s.sendStateUpdates(state)
 
-		<-stream.Context().Done()
+	userState, roomState := s.getUserStreamState(user)
+	if userState == nil {
+		return nil
 	}
+
+	roomState.mu.Lock()
+	userState.state = userRequest
+	userState.stateServer = stream
+	roomState.mu.Unlock()
+
+	s.sendStateUpdates(roomState)
+
+	<-stream.Context().Done()
+
 	return nil
 }
 
@@ -141,18 +146,18 @@ func (s *StreamServiceServer) ChangeState(ctx context.Context, userRequest *User
 	if err != nil {
 		return nil, err
 	}
-	room := s.roomService.State(user)
-	if room != nil {
-		state := s.getState(room)
-		state.mu.Lock()
-		if room.Author == user {
-			state.authorState = userRequest
-		} else {
-			state.guestState = userRequest
-		}
-		state.mu.Unlock()
-		s.sendStateUpdates(state)
+
+	userState, roomState := s.getUserStreamState(user)
+	if userState == nil {
+		return &Ack{}, nil
 	}
+
+	roomState.mu.Lock()
+	userState.state = userRequest
+	roomState.mu.Unlock()
+
+	s.sendStateUpdates(roomState)
+
 	return &Ack{}, nil
 }
 
@@ -161,23 +166,21 @@ func (s *StreamServiceServer) AVStream(userRequest *User, stream Stream_AVStream
 	if err != nil {
 		return err
 	}
-	room := s.roomService.State(user)
-	if room != nil {
-		state := s.getState(room)
-		state.mu.Lock()
-		if room.Author == user {
-			state.authorState = userRequest
-			state.authorStreamServer = stream
-		} else {
-			state.guestState = userRequest
-			state.guestStreamServer = stream
-		}
-		state.mu.Unlock()
 
-		s.sendStateUpdates(state)
-
-		<-stream.Context().Done()
+	userState, roomState := s.getUserStreamState(user)
+	if userState == nil {
+		return nil
 	}
+
+	roomState.mu.Lock()
+	userState.state = userRequest
+	userState.streamServer = stream
+	roomState.mu.Unlock()
+
+	s.sendStateUpdates(roomState)
+
+	<-stream.Context().Done()
+
 	return nil
 }
 
@@ -199,20 +202,25 @@ func (s *StreamServiceServer) handleWS(ws *websocket.Conn) {
 func (s *StreamServiceServer) readLoop(ws *websocket.Conn, user *dto.User, room *dto.Room) {
 	// buffer for reads, 128kb per connection
 	buf := make([]byte, 1024*128)
-	var isAuthor bool
+	var opponent *UserStreamState
 
 	// stream state fetch / creation
 
-	state := s.getState(room)
-	state.mu.Lock()
-	if room.Author == user {
-		state.authorStream = ws
-		isAuthor = true
-	} else {
-		state.guestStream = ws
-		isAuthor = false
+	userState, roomState := s.getUserStreamState(user)
+	if userState == nil {
+		ws.Close()
+		return
 	}
-	state.mu.Unlock()
+
+	roomState.mu.Lock()
+	userState.stream = ws
+	roomState.mu.Unlock()
+
+	if userState == roomState.author {
+		opponent = roomState.guest
+	} else {
+		opponent = roomState.author
+	}
 
 	for {
 		length, err := ws.Read(buf)
@@ -235,16 +243,9 @@ func (s *StreamServiceServer) readLoop(ws *websocket.Conn, user *dto.User, room 
 		}
 		// AV Data came need resend to grpc web stream
 		if bytes.Equal(DataPacket, buf[:3]) {
-			var stream Stream_AVStreamServer
-			if isAuthor && state.guestStreamServer != nil {
-				stream = state.guestStreamServer
-			}
-			if !isAuthor && state.authorStreamServer != nil {
-				stream = state.authorStreamServer
-			}
-			if stream != nil {
+			if opponent.streamServer != nil {
 				// we ignore errors, it's safe
-				_ = state.guestStreamServer.Send(&AVFrameData{
+				_ = opponent.streamServer.Send(&AVFrameData{
 					UserUUID:  user.UUID.String(),
 					FrameData: buf[4:length],
 				})
@@ -255,43 +256,71 @@ func (s *StreamServiceServer) readLoop(ws *websocket.Conn, user *dto.User, room 
 	}
 }
 
-func (s *StreamServiceServer) createState(room *dto.Room) *StreamState {
-	roomState := &StreamState{
-		room:               room,
-		mu:                 sync.RWMutex{},
-		authorStream:       nil,
-		guestStream:        nil,
-		authorStreamServer: nil,
-		guestStreamServer:  nil,
+func (s *StreamServiceServer) createState(room *dto.Room) *RoomStreamState {
+	roomState := &RoomStreamState{
+		room: room,
+		mu:   sync.RWMutex{},
+		author: &UserStreamState{
+			state:        nil,
+			stream:       nil,
+			stateServer:  nil,
+			streamServer: nil,
+		},
+		guest: &UserStreamState{
+			state:        nil,
+			stream:       nil,
+			stateServer:  nil,
+			streamServer: nil,
+		},
 	}
 	s.streamStates[room.UUID] = roomState
 	return roomState
 }
 
-func (s *StreamServiceServer) getState(room *dto.Room) *StreamState {
+func (s *StreamServiceServer) getRoomState(room *dto.Room) *RoomStreamState {
 	s.mu.Lock()
-	state, exists := s.streamStates[room.UUID]
+	roomState, exists := s.streamStates[room.UUID]
 	if !exists {
-		state = s.createState(room)
+		roomState = s.createState(room)
 	}
 	s.mu.Unlock()
-	return state
+	return roomState
 }
 
-func (s *StreamServiceServer) sendStateUpdates(state *StreamState) {
-	state.mu.RLock()
-	defer state.mu.RUnlock()
+func (s *StreamServiceServer) getUserStreamState(user *dto.User) (*UserStreamState, *RoomStreamState) {
+	room := s.roomService.State(user)
+	if room != nil {
+		roomState := s.getRoomState(room)
+		if roomState == nil {
+			return nil, nil
+		}
+		roomState.mu.RLock()
+		defer roomState.mu.RUnlock()
+		var userState *UserStreamState
+		if room.Author == user {
+			userState = roomState.author
+		} else {
+			userState = roomState.guest
+		}
+		return userState, roomState
+	}
+	return nil, nil
+}
+
+func (s *StreamServiceServer) sendStateUpdates(roomState *RoomStreamState) {
+	roomState.mu.RLock()
+	defer roomState.mu.RUnlock()
 	stateMessage := &StateMessage{
 		Time:   time.Now().Unix(),
 		UUID:   uuid.NewString(),
-		Author: state.authorState,
-		Guest:  state.guestState,
+		Author: roomState.author.state,
+		Guest:  roomState.guest.state,
 	}
-	if state.authorStateServer != nil {
-		state.authorStateServer.Send(stateMessage)
+	if roomState.author.stateServer != nil {
+		roomState.author.stateServer.Send(stateMessage)
 	}
-	if state.guestStateServer != nil {
-		state.guestStateServer.Send(stateMessage)
+	if roomState.guest.stateServer != nil {
+		roomState.guest.stateServer.Send(stateMessage)
 	}
 }
 
@@ -311,6 +340,6 @@ func NewStreamServiceServer(roomService *services.RoomService, authService *serv
 	return &StreamServiceServer{
 		roomService:  roomService,
 		authService:  authService,
-		streamStates: make(map[uuid.UUID]*StreamState),
+		streamStates: make(map[uuid.UUID]*RoomStreamState),
 	}
 }
