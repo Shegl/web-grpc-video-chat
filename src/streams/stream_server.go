@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"golang.org/x/net/websocket"
 	"google.golang.org/grpc"
 	"io"
@@ -22,21 +21,6 @@ var PingPacket = []byte{0x50, 0x49, 0x4e, 0x47}
 var PongPacket = []byte{0x50, 0x4f, 0x4e, 0x47}
 var DataPacket = []byte{0x44, 0x41, 0x54, 0x41}
 
-type RoomStreamState struct {
-	room *dto.Room
-	mu   sync.RWMutex
-
-	author *UserStreamState
-	guest  *UserStreamState
-}
-
-type UserStreamState struct {
-	state        *User
-	stream       *websocket.Conn
-	stateServer  Stream_StreamStateServer
-	streamServer Stream_AVStreamServer
-}
-
 // StreamServiceServer : we will use websockets to accept stream from user
 // because stream server on browser is not working
 type StreamServiceServer struct {
@@ -46,15 +30,15 @@ type StreamServiceServer struct {
 
 	addr string
 
-	wg           *sync.WaitGroup
-	mu           sync.RWMutex
-	streamStates map[uuid.UUID]*RoomStreamState
+	wg *sync.WaitGroup
+
+	stateProvider *StreamStateProvider
 }
 
 func (s *StreamServiceServer) Init(addr string, wg *sync.WaitGroup) error {
 	s.addr = addr
 	s.wg = wg
-
+	s.stateProvider = MakeStreamStateProvider()
 	return nil
 }
 
@@ -123,18 +107,18 @@ func (s *StreamServiceServer) StreamState(userRequest *User, stream Stream_Strea
 	if err != nil {
 		return err
 	}
-
-	userState, roomState := s.getUserStreamState(user)
-	if userState == nil {
+	room := s.roomService.State(user)
+	if room == nil {
 		return nil
 	}
+	userState, roomState := s.stateProvider.GetUserStreamState(user, room)
 
 	roomState.mu.Lock()
 	userState.state = userRequest
 	userState.stateServer = stream
 	roomState.mu.Unlock()
 
-	s.sendStateUpdates(roomState)
+	s.stateProvider.SendStateUpdates(roomState)
 
 	<-stream.Context().Done()
 
@@ -146,17 +130,18 @@ func (s *StreamServiceServer) ChangeState(ctx context.Context, userRequest *User
 	if err != nil {
 		return nil, err
 	}
-
-	userState, roomState := s.getUserStreamState(user)
-	if userState == nil {
+	room := s.roomService.State(user)
+	if room == nil {
 		return &Ack{}, nil
 	}
+
+	userState, roomState := s.stateProvider.GetUserStreamState(user, room)
 
 	roomState.mu.Lock()
 	userState.state = userRequest
 	roomState.mu.Unlock()
 
-	s.sendStateUpdates(roomState)
+	s.stateProvider.SendStateUpdates(roomState)
 
 	return &Ack{}, nil
 }
@@ -166,18 +151,19 @@ func (s *StreamServiceServer) AVStream(userRequest *User, stream Stream_AVStream
 	if err != nil {
 		return err
 	}
-
-	userState, roomState := s.getUserStreamState(user)
-	if userState == nil {
+	room := s.roomService.State(user)
+	if room == nil {
 		return nil
 	}
+
+	userState, roomState := s.stateProvider.GetUserStreamState(user, room)
 
 	roomState.mu.Lock()
 	userState.state = userRequest
 	userState.streamServer = stream
 	roomState.mu.Unlock()
 
-	s.sendStateUpdates(roomState)
+	s.stateProvider.SendStateUpdates(roomState)
 
 	<-stream.Context().Done()
 
@@ -206,7 +192,7 @@ func (s *StreamServiceServer) readLoop(ws *websocket.Conn, user *dto.User, room 
 
 	// stream state fetch / creation
 
-	userState, roomState := s.getUserStreamState(user)
+	userState, roomState := s.stateProvider.GetUserStreamState(user, room)
 	if userState == nil {
 		ws.Close()
 		return
@@ -256,74 +242,6 @@ func (s *StreamServiceServer) readLoop(ws *websocket.Conn, user *dto.User, room 
 	}
 }
 
-func (s *StreamServiceServer) createState(room *dto.Room) *RoomStreamState {
-	roomState := &RoomStreamState{
-		room: room,
-		mu:   sync.RWMutex{},
-		author: &UserStreamState{
-			state:        nil,
-			stream:       nil,
-			stateServer:  nil,
-			streamServer: nil,
-		},
-		guest: &UserStreamState{
-			state:        nil,
-			stream:       nil,
-			stateServer:  nil,
-			streamServer: nil,
-		},
-	}
-	s.streamStates[room.UUID] = roomState
-	return roomState
-}
-
-func (s *StreamServiceServer) getRoomState(room *dto.Room) *RoomStreamState {
-	s.mu.Lock()
-	roomState, exists := s.streamStates[room.UUID]
-	if !exists {
-		roomState = s.createState(room)
-	}
-	s.mu.Unlock()
-	return roomState
-}
-
-func (s *StreamServiceServer) getUserStreamState(user *dto.User) (*UserStreamState, *RoomStreamState) {
-	room := s.roomService.State(user)
-	if room != nil {
-		roomState := s.getRoomState(room)
-		if roomState == nil {
-			return nil, nil
-		}
-		roomState.mu.RLock()
-		defer roomState.mu.RUnlock()
-		var userState *UserStreamState
-		if room.Author == user {
-			userState = roomState.author
-		} else {
-			userState = roomState.guest
-		}
-		return userState, roomState
-	}
-	return nil, nil
-}
-
-func (s *StreamServiceServer) sendStateUpdates(roomState *RoomStreamState) {
-	roomState.mu.RLock()
-	defer roomState.mu.RUnlock()
-	stateMessage := &StateMessage{
-		Time:   time.Now().Unix(),
-		UUID:   uuid.NewString(),
-		Author: roomState.author.state,
-		Guest:  roomState.guest.state,
-	}
-	if roomState.author.stateServer != nil {
-		roomState.author.stateServer.Send(stateMessage)
-	}
-	if roomState.guest.stateServer != nil {
-		roomState.guest.stateServer.Send(stateMessage)
-	}
-}
-
 func (s *StreamServiceServer) userAndRoom(userStringUUID string, roomStringUUID string) (*dto.User, *dto.Room, error) {
 	user, err := s.authService.GetUserByString(userStringUUID)
 	if err != nil {
@@ -338,8 +256,7 @@ func (s *StreamServiceServer) userAndRoom(userStringUUID string, roomStringUUID 
 
 func NewStreamServiceServer(roomService *services.RoomService, authService *services.AuthService) *StreamServiceServer {
 	return &StreamServiceServer{
-		roomService:  roomService,
-		authService:  authService,
-		streamStates: make(map[uuid.UUID]*RoomStreamState),
+		roomService: roomService,
+		authService: authService,
 	}
 }
