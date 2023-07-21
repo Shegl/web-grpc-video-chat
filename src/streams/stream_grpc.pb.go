@@ -29,7 +29,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StreamClient interface {
 	StreamState(ctx context.Context, in *User, opts ...grpc.CallOption) (Stream_StreamStateClient, error)
-	ChangeState(ctx context.Context, in *User, opts ...grpc.CallOption) (*Empty, error)
+	ChangeState(ctx context.Context, in *User, opts ...grpc.CallOption) (*Ack, error)
 	AVStream(ctx context.Context, in *User, opts ...grpc.CallOption) (Stream_AVStreamClient, error)
 }
 
@@ -73,8 +73,8 @@ func (x *streamStreamStateClient) Recv() (*StateMessage, error) {
 	return m, nil
 }
 
-func (c *streamClient) ChangeState(ctx context.Context, in *User, opts ...grpc.CallOption) (*Empty, error) {
-	out := new(Empty)
+func (c *streamClient) ChangeState(ctx context.Context, in *User, opts ...grpc.CallOption) (*Ack, error) {
+	out := new(Ack)
 	err := c.cc.Invoke(ctx, Stream_ChangeState_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func (x *streamAVStreamClient) Recv() (*AVFrameData, error) {
 // for forward compatibility
 type StreamServer interface {
 	StreamState(*User, Stream_StreamStateServer) error
-	ChangeState(context.Context, *User) (*Empty, error)
+	ChangeState(context.Context, *User) (*Ack, error)
 	AVStream(*User, Stream_AVStreamServer) error
 	mustEmbedUnimplementedStreamServer()
 }
@@ -131,7 +131,7 @@ type UnimplementedStreamServer struct {
 func (UnimplementedStreamServer) StreamState(*User, Stream_StreamStateServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamState not implemented")
 }
-func (UnimplementedStreamServer) ChangeState(context.Context, *User) (*Empty, error) {
+func (UnimplementedStreamServer) ChangeState(context.Context, *User) (*Ack, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeState not implemented")
 }
 func (UnimplementedStreamServer) AVStream(*User, Stream_AVStreamServer) error {

@@ -111,6 +111,18 @@ func (r *RoomService) leave(user *dto.User) {
 	}
 }
 
+func (r *RoomService) GetRoom(user *dto.User, stringUUID string) (*dto.Room, error) {
+	roomUUID, err := uuid.Parse(stringUUID)
+	if err != nil {
+		return nil, err
+	}
+	room := r.State(user)
+	if room != nil && room.UUID == roomUUID {
+		return room, nil
+	}
+	return nil, errors.New("Wrong room. ")
+}
+
 func NewRoomService() *RoomService {
 	return &RoomService{
 		rooms:    make(map[uuid.UUID]*dto.Room),

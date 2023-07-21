@@ -5,7 +5,7 @@ import type { RpcTransport } from "@protobuf-ts/runtime-rpc";
 import type { ServiceInfo } from "@protobuf-ts/runtime-rpc";
 import { Stream } from "./stream";
 import type { AVFrameData } from "./stream";
-import type { Empty } from "./stream";
+import type { Ack } from "./stream";
 import type { UnaryCall } from "@protobuf-ts/runtime-rpc";
 import { stackIntercept } from "@protobuf-ts/runtime-rpc";
 import type { StateMessage } from "./stream";
@@ -21,9 +21,9 @@ export interface IStreamClient {
      */
     streamState(input: User, options?: RpcOptions): ServerStreamingCall<User, StateMessage>;
     /**
-     * @generated from protobuf rpc: ChangeState(User) returns (Empty);
+     * @generated from protobuf rpc: ChangeState(User) returns (Ack);
      */
-    changeState(input: User, options?: RpcOptions): UnaryCall<User, Empty>;
+    changeState(input: User, options?: RpcOptions): UnaryCall<User, Ack>;
     /**
      * @generated from protobuf rpc: AVStream(User) returns (stream AVFrameData);
      */
@@ -46,11 +46,11 @@ export class StreamClient implements IStreamClient, ServiceInfo {
         return stackIntercept<User, StateMessage>("serverStreaming", this._transport, method, opt, input);
     }
     /**
-     * @generated from protobuf rpc: ChangeState(User) returns (Empty);
+     * @generated from protobuf rpc: ChangeState(User) returns (Ack);
      */
-    changeState(input: User, options?: RpcOptions): UnaryCall<User, Empty> {
+    changeState(input: User, options?: RpcOptions): UnaryCall<User, Ack> {
         const method = this.methods[1], opt = this._transport.mergeOptions(options);
-        return stackIntercept<User, Empty>("unary", this._transport, method, opt, input);
+        return stackIntercept<User, Ack>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: AVStream(User) returns (stream AVFrameData);

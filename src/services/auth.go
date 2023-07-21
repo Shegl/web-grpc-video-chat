@@ -55,6 +55,18 @@ func (a *AuthService) GetUser(userUUID uuid.UUID) (*dto.User, error) {
 	}
 }
 
+func (a *AuthService) GetUserByString(stringUUID string) (*dto.User, error) {
+	userUUID, err := uuid.Parse(stringUUID)
+	if err != nil {
+		return nil, err
+	}
+	user, err := a.GetUser(userUUID)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
 // Logout actually we want our users to be logged in forever
 // but, it's nice to have option to logout if you have logged in, right ?
 func (a *AuthService) Logout(userUUID uuid.UUID) {

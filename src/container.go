@@ -7,13 +7,16 @@ import (
 	"web-grpc-video-chat/src/http/controllers"
 	"web-grpc-video-chat/src/http/middleware"
 	"web-grpc-video-chat/src/services"
+	"web-grpc-video-chat/src/streams"
 )
 
 func BuildContainer() *dig.Container {
 	container := dig.New()
 	processError(container.Provide(NewApplication))
 	processError(container.Provide(http.NewWebServer))
+
 	processError(container.Provide(chat.NewChatServiceServer))
+	processError(container.Provide(streams.NewStreamServiceServer))
 
 	processError(container.Provide(controllers.NewAuthController))
 	processError(container.Provide(controllers.NewRoomController))

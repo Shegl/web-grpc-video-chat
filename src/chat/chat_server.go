@@ -2,7 +2,6 @@ package chat
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -42,7 +41,7 @@ func (s *ChatServiceServer) Init(addr string, wg *sync.WaitGroup) error {
 	return nil
 }
 
-func (s *ChatServiceServer) Run(ctx context.Context) {
+func (s *ChatServiceServer) Run(ctx context.Context) error {
 	s.wg.Add(1)
 
 	log.Println("ChatServiceServer:: starting")
@@ -69,6 +68,8 @@ func (s *ChatServiceServer) Run(ctx context.Context) {
 
 		log.Println("ChatServiceServer:: shutdown complete")
 	}()
+
+	return nil
 }
 
 func (s *ChatServiceServer) GetHistory(ctx context.Context, request *AuthRequest) (*HistoryResponse, error) {
@@ -125,40 +126,16 @@ func (s *ChatServiceServer) ListenRequest(request *AuthRequest, stream Chat_List
 }
 
 func (s *ChatServiceServer) userAndRoom(userStringUUID string, chatStringUUID string) (*dto.User, *dto.Room, error) {
-	user, err := s.getUser(userStringUUID)
+	user, err := s.authService.GetUserByString(userStringUUID)
 	if err != nil {
 		return nil, nil, err
 	}
 	// we must check is he in Room and have right to request history
-	room, err := s.getRoom(user, chatStringUUID)
+	room, err := s.roomService.GetRoom(user, chatStringUUID)
 	if err != nil {
 		return nil, nil, err
 	}
 	return user, room, nil
-}
-
-func (s *ChatServiceServer) getUser(stringUUID string) (*dto.User, error) {
-	userUUID, err := uuid.Parse(stringUUID)
-	if err != nil {
-		return nil, err
-	}
-	user, err := s.authService.GetUser(userUUID)
-	if err != nil {
-		return nil, err
-	}
-	return user, nil
-}
-
-func (s *ChatServiceServer) getRoom(user *dto.User, stringUUID string) (*dto.Room, error) {
-	roomUUID, err := uuid.Parse(stringUUID)
-	if err != nil {
-		return nil, err
-	}
-	room := s.roomService.State(user)
-	if room != nil && room.UUID == roomUUID {
-		return room, nil
-	}
-	return nil, errors.New("Wrong room. ")
 }
 
 func (s *ChatServiceServer) getChat(room *dto.Room) *ChatLog {

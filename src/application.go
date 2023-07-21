@@ -9,11 +9,13 @@ import (
 	"syscall"
 	"web-grpc-video-chat/src/chat"
 	"web-grpc-video-chat/src/http"
+	"web-grpc-video-chat/src/streams"
 )
 
 type Application struct {
 	webServer    *http.WebServer
 	chatServer   *chat.ChatServiceServer
+	streamServer *streams.StreamServiceServer
 	wg           sync.WaitGroup
 	sigs         chan os.Signal
 	shutdownChan chan struct{}
@@ -41,6 +43,11 @@ func (a *Application) Init(version string) error {
 		&a.wg,
 	)
 
+	a.streamServer.Init(
+		":3002",
+		&a.wg,
+	)
+
 	log.Println("application:: Init() :: init complete")
 	return nil
 }
@@ -55,11 +62,16 @@ func (a *Application) Run(ctx context.Context) {
 		panic(err)
 	}
 
-	go a.chatServer.Run(cancelCtx)
+	err = a.chatServer.Run(cancelCtx)
 	if err != nil {
 		panic(err)
 	}
 
+	err = a.streamServer.Run(cancelCtx)
+	if err != nil {
+		panic(err)
+	}
+	
 	log.Println("application:: Run() :: running")
 	a.wg.Wait()
 
@@ -80,9 +92,11 @@ func (a *Application) processSignals(cancelFunc context.CancelFunc) {
 func NewApplication(
 	webServer *http.WebServer,
 	chatServer *chat.ChatServiceServer,
+	streamServer *streams.StreamServiceServer,
 ) *Application {
 	return &Application{
-		webServer:  webServer,
-		chatServer: chatServer,
+		webServer:    webServer,
+		chatServer:   chatServer,
+		streamServer: streamServer,
 	}
 }

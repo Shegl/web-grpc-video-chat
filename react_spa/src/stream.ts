@@ -13,9 +13,9 @@ import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MESSAGE_TYPE } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
 /**
- * @generated from protobuf message Empty
+ * @generated from protobuf message Ack
  */
-export interface Empty {
+export interface Ack {
 }
 /**
  * @generated from protobuf message StateMessage
@@ -73,21 +73,21 @@ export interface AVFrameData {
     frameData: Uint8Array;
 }
 // @generated message type with reflection information, may provide speed optimized methods
-class Empty$Type extends MessageType<Empty> {
+class Ack$Type extends MessageType<Ack> {
     constructor() {
-        super("Empty", []);
+        super("Ack", []);
     }
-    create(value?: PartialMessage<Empty>): Empty {
+    create(value?: PartialMessage<Ack>): Ack {
         const message = {};
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<Empty>(this, message, value);
+            reflectionMergePartial<Ack>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: Empty): Empty {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: Ack): Ack {
         return target ?? this.create();
     }
-    internalBinaryWrite(message: Empty, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+    internalBinaryWrite(message: Ack, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -95,9 +95,9 @@ class Empty$Type extends MessageType<Empty> {
     }
 }
 /**
- * @generated MessageType for protobuf message Empty
+ * @generated MessageType for protobuf message Ack
  */
-export const Empty = new Empty$Type();
+export const Ack = new Ack$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class StateMessage$Type extends MessageType<StateMessage> {
     constructor() {
@@ -293,6 +293,6 @@ export const AVFrameData = new AVFrameData$Type();
  */
 export const Stream = new ServiceType("Stream", [
     { name: "StreamState", serverStreaming: true, options: {}, I: User, O: StateMessage },
-    { name: "ChangeState", options: {}, I: User, O: Empty },
+    { name: "ChangeState", options: {}, I: User, O: Ack },
     { name: "AVStream", serverStreaming: true, options: {}, I: User, O: AVFrameData }
 ]);

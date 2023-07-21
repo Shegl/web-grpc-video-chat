@@ -4,11 +4,11 @@ option go_package = "web-grpc-video-chat/src/streams";
 
 service Stream {
   rpc StreamState(User) returns (stream StateMessage);
-  rpc ChangeState(User) returns (Empty);
+  rpc ChangeState(User) returns (Ack);
   rpc AVStream(User) returns (stream AVFrameData);
 }
 
-message Empty {}
+message Ack {}
 
 message StateMessage {
   int64 Time = 1;
