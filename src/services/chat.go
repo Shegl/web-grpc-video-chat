@@ -71,7 +71,7 @@ func (s *ChatService) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *ChatService) MakeChat(room *dto.Room) *ChatState {
+func (s *ChatService) MakeChatState(room *dto.Room) *ChatState {
 	chatState := &ChatState{
 		room: room,
 		messages: []*chat.ChatMessage{{
@@ -108,25 +108,21 @@ func (s *ChatService) MakeChat(room *dto.Room) *ChatState {
 
 func (s *ChatService) GetHistory(ctx context.Context, request *chat.AuthRequest) (*chat.HistoryResponse, error) {
 	// we must check User and Room permissions
-	state, _, _, err := s.stateByUserAndRoom(request.GetUUID(), request.GetChatUUID())
+	state, _, err := s.stateByUserAndRoom(request.GetUUID(), request.GetChatUUID())
 	if err != nil {
-		fmt.Println("error on fetching user and room")
+		fmt.Println("Error on fetching user and room, room might be already closed or never exists.")
 		return nil, err
 	}
-	chatState := state.chat
-	if chatState != nil {
-		chatState.mu.RLock()
-		defer chatState.mu.RUnlock()
-		return &chat.HistoryResponse{
-			Messages: chatState.messages,
-		}, nil
-	}
-	return nil, errors.New("Chat is not exists, room already closed. ")
+	state.chat.mu.RLock()
+	defer state.chat.mu.RUnlock()
+	return &chat.HistoryResponse{
+		Messages: state.chat.messages,
+	}, nil
 }
 
 func (s *ChatService) SendMessage(ctx context.Context, request *chat.SendMessageRequest) (*chat.Empty, error) {
 	// we must check User and Room correctness
-	state, user, _, err := s.stateByUserAndRoom(request.GetAuthData().GetUUID(), request.GetAuthData().GetChatUUID())
+	state, user, err := s.stateByUserAndRoom(request.GetAuthData().GetUUID(), request.GetAuthData().GetChatUUID())
 	if err != nil {
 		return nil, err
 	}
@@ -142,25 +138,25 @@ func (s *ChatService) SendMessage(ctx context.Context, request *chat.SendMessage
 		Msg:      request.Msg,
 	}
 
-	chatState := state.chat
-	if chatState != nil {
-		chatState.msgChan <- chatMessage
-	}
+	state.chat.msgChan <- chatMessage
 
 	return &chat.Empty{}, nil
 }
 
 func (s *ChatService) Listen(request *chat.AuthRequest, stream chat.Chat_ListenServer) error {
-	_, user, room, err := s.stateByUserAndRoom(request.GetUUID(), request.GetChatUUID())
+	state, user, err := s.stateByUserAndRoom(request.GetUUID(), request.GetChatUUID())
 	if err != nil {
 		return err
 	}
-	_, err = s.roomStateProvider.RoomChatConnected(room, user, stream)
+	err = state.RoomChatConnected(user, stream)
 	if err != nil {
 		return err
 	}
 
-	<-stream.Context().Done()
+	select {
+	case <-stream.Context().Done():
+	case <-state.roomCtx.Done():
+	}
 
 	return nil
 }
@@ -168,23 +164,23 @@ func (s *ChatService) Listen(request *chat.AuthRequest, stream chat.Chat_ListenS
 func (s *ChatService) stateByUserAndRoom(
 	userStringUUID string,
 	chatStringUUID string,
-) (*RoomState, *dto.User, *dto.Room, error) {
+) (*RoomState, *dto.User, error) {
 	chatUUID, errChat := uuid.Parse(chatStringUUID)
 	userUUID, errUser := uuid.Parse(userStringUUID)
 	if errChat != nil || errUser != nil {
-		return nil, nil, nil, errors.New("Wrong UUID. ")
+		return nil, nil, errors.New("Wrong UUID. ")
 	}
 	roomState := s.roomStateProvider.GetRoomStateByUUID(chatUUID)
 	if roomState == nil {
-		return nil, nil, nil, errors.New("Room not found. ")
+		return nil, nil, errors.New("Room not found. ")
 	}
 	if roomState.author.user.UUID == userUUID {
-		return roomState, roomState.author.user, roomState.room, nil
+		return roomState, roomState.author.user, nil
 	}
 	if roomState.guest != nil && roomState.guest.user.UUID == userUUID {
-		return roomState, roomState.guest.user, roomState.room, nil
+		return roomState, roomState.guest.user, nil
 	}
-	return nil, nil, nil, errors.New("Wrong combination of user and room. ")
+	return nil, nil, errors.New("Wrong combination of user and room. ")
 }
 
 func NewChatService(provider *RoomStateProvider) *ChatService {

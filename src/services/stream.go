@@ -103,6 +103,23 @@ func (s *StreamService) Run(ctx context.Context) error {
 	return nil
 }
 
+func (s *StreamService) ChangeState(ctx context.Context, userRequest *streams.User) (*streams.Ack, error) {
+	user, err := s.authService.GetUserByString(userRequest.UserUUID)
+	if err != nil {
+		return nil, err
+	}
+	room := s.roomService.State(user)
+	if room != nil {
+		roomState := s.stateProvider.GetRoomState(room)
+		if roomState != nil {
+			roomState.UpdateUserStreamState(user, userRequest)
+			s.SendStateUpdate(roomState)
+		}
+	}
+
+	return &streams.Ack{}, nil
+}
+
 func (s *StreamService) StreamState(userRequest *streams.User, stream streams.Stream_StreamStateServer) error {
 	user, err := s.authService.GetUserByString(userRequest.UserUUID)
 	if err != nil {
@@ -112,39 +129,17 @@ func (s *StreamService) StreamState(userRequest *streams.User, stream streams.St
 	if room == nil {
 		return nil
 	}
-	userState, roomState := s.stateProvider.GetUserState(room, user)
 
-	roomState.mu.Lock()
-	userState.streamState = userRequest
-	userState.stateServer = stream
-	roomState.mu.Unlock()
-
-	s.SendStateUpdates(roomState)
-
-	<-stream.Context().Done()
+	roomState := s.stateProvider.GetRoomState(room)
+	if roomState != nil && roomState.StateStreamConnected(user, stream) == nil {
+		s.SendStateUpdate(roomState)
+		select {
+		case <-stream.Context().Done():
+		case <-roomState.roomCtx.Done():
+		}
+	}
 
 	return nil
-}
-
-func (s *StreamService) ChangeState(ctx context.Context, userRequest *streams.User) (*streams.Ack, error) {
-	user, err := s.authService.GetUserByString(userRequest.UserUUID)
-	if err != nil {
-		return nil, err
-	}
-	room := s.roomService.State(user)
-	if room == nil {
-		return &streams.Ack{}, nil
-	}
-
-	userState, roomState := s.stateProvider.GetUserState(room, user)
-
-	roomState.mu.Lock()
-	userState.streamState = userRequest
-	roomState.mu.Unlock()
-
-	s.SendStateUpdates(roomState)
-
-	return &streams.Ack{}, nil
 }
 
 func (s *StreamService) AVStream(userRequest *streams.User, stream streams.Stream_AVStreamServer) error {
@@ -157,21 +152,20 @@ func (s *StreamService) AVStream(userRequest *streams.User, stream streams.Strea
 		return nil
 	}
 
-	userState, roomState := s.stateProvider.GetUserState(room, user)
-
-	roomState.mu.Lock()
-	userState.streamState = userRequest
-	userState.streamServer = stream
-	roomState.mu.Unlock()
-
-	s.SendStateUpdates(roomState)
-
-	<-stream.Context().Done()
+	roomState := s.stateProvider.GetRoomState(room)
+	if roomState != nil && roomState.AVStreamConnected(user, stream) == nil {
+		roomState.UpdateUserStreamState(user, userRequest)
+		s.SendStateUpdate(roomState)
+		select {
+		case <-stream.Context().Done():
+		case <-roomState.roomCtx.Done():
+		}
+	}
 
 	return nil
 }
 
-func (s *StreamService) SendStateUpdates(roomState *RoomState) {
+func (s *StreamService) SendStateUpdate(roomState *RoomState) {
 	roomState.mu.RLock()
 	defer roomState.mu.RUnlock()
 	stateMessage := &streams.StateMessage{
@@ -212,22 +206,36 @@ func (s *StreamService) readLoop(ws *websocket.Conn, user *dto.User, room *dto.R
 	var opponent *UserState
 
 	// stream state fetch / creation
+	roomState := s.stateProvider.GetRoomState(room)
+	if roomState == nil {
+		ws.Close()
+		return
+	}
 
-	userState, roomState := s.stateProvider.GetUserState(room, user)
+	// can we fetch userState
+	userState := roomState.GetUserState(user)
 	if userState == nil {
 		ws.Close()
 		return
 	}
 
+	// some bad design magic, can be really improved much better
 	roomState.mu.Lock()
+	if userState.stream != nil {
+		userState.stream.Close()
+	}
 	userState.stream = ws
-	roomState.mu.Unlock()
-
 	if userState == roomState.author {
 		opponent = roomState.guest
 	} else {
 		opponent = roomState.author
 	}
+	roomState.mu.Unlock()
+
+	go func() {
+		<-roomState.roomCtx.Done()
+		ws.Close()
+	}()
 
 	for {
 		length, err := ws.Read(buf)

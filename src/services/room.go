@@ -3,7 +3,6 @@ package services
 import (
 	"errors"
 	"github.com/google/uuid"
-	"log"
 	"sync"
 	"web-grpc-video-chat/src/dto"
 )
@@ -45,7 +44,7 @@ func (r *RoomService) create(user *dto.User) *dto.Room {
 	r.rooms[room.UUID] = room
 	r.asAuthor[user.UUID] = room
 
-	r.roomStateProvider.MakeRoomState(room, user, r.chatService.MakeChat(room))
+	r.roomStateProvider.MakeRoomState(room, r.chatService.MakeChatState(room))
 
 	return room
 }
@@ -76,7 +75,12 @@ func (r *RoomService) Join(roomUUID uuid.UUID, user *dto.User) (*dto.Room, error
 
 func (r *RoomService) join(roomUUID uuid.UUID, user *dto.User) *dto.Room {
 	if room, exists := r.rooms[roomUUID]; exists {
-		_, err := r.roomStateProvider.JoinRoomStateUpdate(room, user)
+		roomState := r.roomStateProvider.GetRoomState(room)
+		if roomState == nil {
+			// room in state of deletion
+			return nil
+		}
+		err := roomState.JoinRoomUpdate(user)
 		if err != nil {
 			panic(err)
 		}
@@ -119,9 +123,9 @@ func (r *RoomService) Leave(user *dto.User) {
 
 func (r *RoomService) leave(user *dto.User) {
 	if room, exists := r.asGuest[user.UUID]; exists {
-		_, err := r.roomStateProvider.LeaveRoomStateUpdate(room, user)
-		if err != nil {
-			log.Println("Unhandled error, ", err)
+		roomState := r.roomStateProvider.GetRoomState(room)
+		if roomState != nil {
+			roomState.LeaveRoomUpdate(user)
 		}
 		room.Guest = nil
 		delete(r.asGuest, user.UUID)
