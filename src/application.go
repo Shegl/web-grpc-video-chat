@@ -7,15 +7,14 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"web-grpc-video-chat/src/chat"
 	"web-grpc-video-chat/src/http"
-	"web-grpc-video-chat/src/streams"
+	"web-grpc-video-chat/src/services"
 )
 
 type Application struct {
 	webServer    *http.WebServer
-	chatServer   *chat.ChatServiceServer
-	streamServer *streams.StreamServiceServer
+	chatServer   *services.ChatService
+	streamServer *services.StreamService
 	wg           sync.WaitGroup
 	sigs         chan os.Signal
 	shutdownChan chan struct{}
@@ -71,7 +70,7 @@ func (a *Application) Run(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	
+
 	log.Println("application:: Run() :: running")
 	a.wg.Wait()
 
@@ -91,8 +90,8 @@ func (a *Application) processSignals(cancelFunc context.CancelFunc) {
 
 func NewApplication(
 	webServer *http.WebServer,
-	chatServer *chat.ChatServiceServer,
-	streamServer *streams.StreamServiceServer,
+	chatServer *services.ChatService,
+	streamServer *services.StreamService,
 ) *Application {
 	return &Application{
 		webServer:    webServer,

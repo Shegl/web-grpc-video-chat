@@ -5,7 +5,7 @@ option go_package = "web-grpc-video-chat/src/chat";
 service Chat {
   rpc GetHistory(AuthRequest) returns (HistoryResponse);
   rpc SendMessage(SendMessageRequest) returns (Empty);
-  rpc ListenRequest(AuthRequest) returns (stream ChatMessage);
+  rpc Listen(AuthRequest) returns (stream ChatMessage);
 }
 
 message Empty {}

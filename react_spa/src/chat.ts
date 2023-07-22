@@ -339,5 +339,5 @@ export const HistoryResponse = new HistoryResponse$Type();
 export const Chat = new ServiceType("Chat", [
     { name: "GetHistory", options: {}, I: AuthRequest, O: HistoryResponse },
     { name: "SendMessage", options: {}, I: SendMessageRequest, O: Empty },
-    { name: "ListenRequest", serverStreaming: true, options: {}, I: AuthRequest, O: ChatMessage }
+    { name: "Listen", serverStreaming: true, options: {}, I: AuthRequest, O: ChatMessage }
 ]);

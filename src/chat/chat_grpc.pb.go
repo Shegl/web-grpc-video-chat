@@ -19,9 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Chat_GetHistory_FullMethodName    = "/Chat/GetHistory"
-	Chat_SendMessage_FullMethodName   = "/Chat/SendMessage"
-	Chat_ListenRequest_FullMethodName = "/Chat/ListenRequest"
+	Chat_GetHistory_FullMethodName  = "/Chat/GetHistory"
+	Chat_SendMessage_FullMethodName = "/Chat/SendMessage"
+	Chat_Listen_FullMethodName      = "/Chat/Listen"
 )
 
 // ChatClient is the client API for Chat service.
@@ -30,7 +30,7 @@ const (
 type ChatClient interface {
 	GetHistory(ctx context.Context, in *AuthRequest, opts ...grpc.CallOption) (*HistoryResponse, error)
 	SendMessage(ctx context.Context, in *SendMessageRequest, opts ...grpc.CallOption) (*Empty, error)
-	ListenRequest(ctx context.Context, in *AuthRequest, opts ...grpc.CallOption) (Chat_ListenRequestClient, error)
+	Listen(ctx context.Context, in *AuthRequest, opts ...grpc.CallOption) (Chat_ListenClient, error)
 }
 
 type chatClient struct {
@@ -59,12 +59,12 @@ func (c *chatClient) SendMessage(ctx context.Context, in *SendMessageRequest, op
 	return out, nil
 }
 
-func (c *chatClient) ListenRequest(ctx context.Context, in *AuthRequest, opts ...grpc.CallOption) (Chat_ListenRequestClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Chat_ServiceDesc.Streams[0], Chat_ListenRequest_FullMethodName, opts...)
+func (c *chatClient) Listen(ctx context.Context, in *AuthRequest, opts ...grpc.CallOption) (Chat_ListenClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Chat_ServiceDesc.Streams[0], Chat_Listen_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &chatListenRequestClient{stream}
+	x := &chatListenClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -74,16 +74,16 @@ func (c *chatClient) ListenRequest(ctx context.Context, in *AuthRequest, opts ..
 	return x, nil
 }
 
-type Chat_ListenRequestClient interface {
+type Chat_ListenClient interface {
 	Recv() (*ChatMessage, error)
 	grpc.ClientStream
 }
 
-type chatListenRequestClient struct {
+type chatListenClient struct {
 	grpc.ClientStream
 }
 
-func (x *chatListenRequestClient) Recv() (*ChatMessage, error) {
+func (x *chatListenClient) Recv() (*ChatMessage, error) {
 	m := new(ChatMessage)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func (x *chatListenRequestClient) Recv() (*ChatMessage, error) {
 type ChatServer interface {
 	GetHistory(context.Context, *AuthRequest) (*HistoryResponse, error)
 	SendMessage(context.Context, *SendMessageRequest) (*Empty, error)
-	ListenRequest(*AuthRequest, Chat_ListenRequestServer) error
+	Listen(*AuthRequest, Chat_ListenServer) error
 	mustEmbedUnimplementedChatServer()
 }
 
@@ -111,8 +111,8 @@ func (UnimplementedChatServer) GetHistory(context.Context, *AuthRequest) (*Histo
 func (UnimplementedChatServer) SendMessage(context.Context, *SendMessageRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendMessage not implemented")
 }
-func (UnimplementedChatServer) ListenRequest(*AuthRequest, Chat_ListenRequestServer) error {
-	return status.Errorf(codes.Unimplemented, "method ListenRequest not implemented")
+func (UnimplementedChatServer) Listen(*AuthRequest, Chat_ListenServer) error {
+	return status.Errorf(codes.Unimplemented, "method Listen not implemented")
 }
 func (UnimplementedChatServer) mustEmbedUnimplementedChatServer() {}
 
@@ -163,24 +163,24 @@ func _Chat_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Chat_ListenRequest_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Chat_Listen_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(AuthRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(ChatServer).ListenRequest(m, &chatListenRequestServer{stream})
+	return srv.(ChatServer).Listen(m, &chatListenServer{stream})
 }
 
-type Chat_ListenRequestServer interface {
+type Chat_ListenServer interface {
 	Send(*ChatMessage) error
 	grpc.ServerStream
 }
 
-type chatListenRequestServer struct {
+type chatListenServer struct {
 	grpc.ServerStream
 }
 
-func (x *chatListenRequestServer) Send(m *ChatMessage) error {
+func (x *chatListenServer) Send(m *ChatMessage) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -202,8 +202,8 @@ var Chat_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "ListenRequest",
-			Handler:       _Chat_ListenRequest_Handler,
+			StreamName:    "Listen",
+			Handler:       _Chat_Listen_Handler,
 			ServerStreams: true,
 		},
 	},

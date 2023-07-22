@@ -3,15 +3,20 @@ package services
 import (
 	"errors"
 	"github.com/google/uuid"
+	"log"
 	"sync"
 	"web-grpc-video-chat/src/dto"
 )
 
 type RoomService struct {
+	roomStateProvider *RoomStateProvider
+	chatService       *ChatService
+
 	rooms    map[uuid.UUID]*dto.Room
 	asAuthor map[uuid.UUID]*dto.Room
 	asGuest  map[uuid.UUID]*dto.Room
-	mu       sync.RWMutex
+
+	mu sync.RWMutex
 }
 
 func (r *RoomService) Create(user *dto.User) (*dto.Room, error) {
@@ -23,7 +28,7 @@ func (r *RoomService) Create(user *dto.User) (*dto.Room, error) {
 		// if he needs new room, he will get that he needs leave his room first
 		return room, nil
 	}
-	if _, exists := r.asGuest[user.UUID]; exists {
+	if _, existsAsGuest := r.asGuest[user.UUID]; existsAsGuest {
 		// let's check user, what if he already as guest in someone else room
 		r.leave(user)
 	}
@@ -39,6 +44,9 @@ func (r *RoomService) create(user *dto.User) *dto.Room {
 	}
 	r.rooms[room.UUID] = room
 	r.asAuthor[user.UUID] = room
+
+	r.roomStateProvider.MakeRoomState(room, user, r.chatService.MakeChat(room))
+
 	return room
 }
 
@@ -68,6 +76,10 @@ func (r *RoomService) Join(roomUUID uuid.UUID, user *dto.User) (*dto.Room, error
 
 func (r *RoomService) join(roomUUID uuid.UUID, user *dto.User) *dto.Room {
 	if room, exists := r.rooms[roomUUID]; exists {
+		_, err := r.roomStateProvider.JoinRoomStateUpdate(room, user)
+		if err != nil {
+			panic(err)
+		}
 		room.Guest = user
 		r.asGuest[user.UUID] = room
 		return room
@@ -91,21 +103,26 @@ func (r *RoomService) Leave(user *dto.User) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if room, exists := r.asAuthor[user.UUID]; exists {
+		roomState := r.roomStateProvider.GetRoomState(room)
+		if room.Guest != nil {
+			r.leave(room.Guest)
+		}
+		if roomState != nil {
+			r.roomStateProvider.Forget(roomState)
+		}
 		delete(r.rooms, room.UUID)
 		delete(r.asAuthor, user.UUID)
-		if room.Guest != nil {
-			delete(r.asGuest, room.Guest.UUID)
-		}
 		return
 	}
-	if room, exists := r.asGuest[user.UUID]; exists {
-		room.Guest = nil
-		delete(r.asGuest, user.UUID)
-	}
+	r.leave(user)
 }
 
 func (r *RoomService) leave(user *dto.User) {
 	if room, exists := r.asGuest[user.UUID]; exists {
+		_, err := r.roomStateProvider.LeaveRoomStateUpdate(room, user)
+		if err != nil {
+			log.Println("Unhandled error, ", err)
+		}
 		room.Guest = nil
 		delete(r.asGuest, user.UUID)
 	}
@@ -123,8 +140,11 @@ func (r *RoomService) GetRoom(user *dto.User, stringUUID string) (*dto.Room, err
 	return nil, errors.New("Wrong room. ")
 }
 
-func NewRoomService() *RoomService {
+func NewRoomService(provider *RoomStateProvider, chatService *ChatService) *RoomService {
 	return &RoomService{
+		roomStateProvider: provider,
+		chatService:       chatService,
+
 		rooms:    make(map[uuid.UUID]*dto.Room),
 		asAuthor: make(map[uuid.UUID]*dto.Room),
 		asGuest:  make(map[uuid.UUID]*dto.Room),

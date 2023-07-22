@@ -1,10 +1,11 @@
-package streams
+package services
 
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"golang.org/x/net/websocket"
 	"google.golang.org/grpc"
 	"io"
@@ -14,42 +15,42 @@ import (
 	"sync"
 	"time"
 	"web-grpc-video-chat/src/dto"
-	"web-grpc-video-chat/src/services"
+	"web-grpc-video-chat/src/streams"
 )
 
 var PingPacket = []byte{0x50, 0x49, 0x4e, 0x47}
 var PongPacket = []byte{0x50, 0x4f, 0x4e, 0x47}
 var DataPacket = []byte{0x44, 0x41, 0x54, 0x41}
 
-// StreamServiceServer : we will use websockets to accept stream from user
+// StreamService : we will use websockets to accept stream from user
 // because stream server on browser is not working
-type StreamServiceServer struct {
-	UnimplementedStreamServer
-	roomService *services.RoomService
-	authService *services.AuthService
+type StreamService struct {
+	streams.UnimplementedStreamServer
+	roomService *RoomService
+	authService *AuthService
 
 	addr string
 
 	wg *sync.WaitGroup
 
-	stateProvider *StreamStateProvider
+	stateProvider *RoomStateProvider
 }
 
-func (s *StreamServiceServer) Init(addr string, wg *sync.WaitGroup) error {
+func (s *StreamService) Init(addr string, wg *sync.WaitGroup) error {
 	s.addr = addr
 	s.wg = wg
-	s.stateProvider = MakeStreamStateProvider()
+
 	return nil
 }
 
-func (s *StreamServiceServer) Run(ctx context.Context) error {
+func (s *StreamService) Run(ctx context.Context) error {
 	s.wg.Add(1)
 
 	log.Println("StreamServiceServer:: starting")
 
 	// we create grpc without tls, envoy will terminate it
 	grpcServer := grpc.NewServer()
-	RegisterStreamServer(grpcServer, s)
+	streams.RegisterStreamServer(grpcServer, s)
 
 	ln, err := net.Listen("tcp", s.addr)
 	if err != nil {
@@ -102,7 +103,7 @@ func (s *StreamServiceServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *StreamServiceServer) StreamState(userRequest *User, stream Stream_StreamStateServer) error {
+func (s *StreamService) StreamState(userRequest *streams.User, stream streams.Stream_StreamStateServer) error {
 	user, err := s.authService.GetUserByString(userRequest.UserUUID)
 	if err != nil {
 		return err
@@ -111,42 +112,42 @@ func (s *StreamServiceServer) StreamState(userRequest *User, stream Stream_Strea
 	if room == nil {
 		return nil
 	}
-	userState, roomState := s.stateProvider.GetUserStreamState(user, room)
+	userState, roomState := s.stateProvider.GetUserState(room, user)
 
 	roomState.mu.Lock()
-	userState.state = userRequest
+	userState.streamState = userRequest
 	userState.stateServer = stream
 	roomState.mu.Unlock()
 
-	s.stateProvider.SendStateUpdates(roomState)
+	s.SendStateUpdates(roomState)
 
 	<-stream.Context().Done()
 
 	return nil
 }
 
-func (s *StreamServiceServer) ChangeState(ctx context.Context, userRequest *User) (*Ack, error) {
+func (s *StreamService) ChangeState(ctx context.Context, userRequest *streams.User) (*streams.Ack, error) {
 	user, err := s.authService.GetUserByString(userRequest.UserUUID)
 	if err != nil {
 		return nil, err
 	}
 	room := s.roomService.State(user)
 	if room == nil {
-		return &Ack{}, nil
+		return &streams.Ack{}, nil
 	}
 
-	userState, roomState := s.stateProvider.GetUserStreamState(user, room)
+	userState, roomState := s.stateProvider.GetUserState(room, user)
 
 	roomState.mu.Lock()
-	userState.state = userRequest
+	userState.streamState = userRequest
 	roomState.mu.Unlock()
 
-	s.stateProvider.SendStateUpdates(roomState)
+	s.SendStateUpdates(roomState)
 
-	return &Ack{}, nil
+	return &streams.Ack{}, nil
 }
 
-func (s *StreamServiceServer) AVStream(userRequest *User, stream Stream_AVStreamServer) error {
+func (s *StreamService) AVStream(userRequest *streams.User, stream streams.Stream_AVStreamServer) error {
 	user, err := s.authService.GetUserByString(userRequest.UserUUID)
 	if err != nil {
 		return err
@@ -156,21 +157,41 @@ func (s *StreamServiceServer) AVStream(userRequest *User, stream Stream_AVStream
 		return nil
 	}
 
-	userState, roomState := s.stateProvider.GetUserStreamState(user, room)
+	userState, roomState := s.stateProvider.GetUserState(room, user)
 
 	roomState.mu.Lock()
-	userState.state = userRequest
+	userState.streamState = userRequest
 	userState.streamServer = stream
 	roomState.mu.Unlock()
 
-	s.stateProvider.SendStateUpdates(roomState)
+	s.SendStateUpdates(roomState)
 
 	<-stream.Context().Done()
 
 	return nil
 }
 
-func (s *StreamServiceServer) handleWS(ws *websocket.Conn) {
+func (s *StreamService) SendStateUpdates(roomState *RoomState) {
+	roomState.mu.RLock()
+	defer roomState.mu.RUnlock()
+	stateMessage := &streams.StateMessage{
+		Time:   time.Now().Unix(),
+		UUID:   uuid.NewString(),
+		Author: roomState.author.streamState,
+		Guest:  nil,
+	}
+	if roomState.guest != nil {
+		stateMessage.Guest = roomState.guest.streamState
+	}
+	if roomState.author.stateServer != nil {
+		roomState.author.stateServer.Send(stateMessage)
+	}
+	if roomState.guest != nil && roomState.guest.stateServer != nil {
+		roomState.guest.stateServer.Send(stateMessage)
+	}
+}
+
+func (s *StreamService) handleWS(ws *websocket.Conn) {
 	userUUID := string([]byte(ws.Request().URL.Path)[17:53])
 	roomUUID := string([]byte(ws.Request().URL.Path)[54:])
 	user, room, err := s.userAndRoom(userUUID, roomUUID)
@@ -185,14 +206,14 @@ func (s *StreamServiceServer) handleWS(ws *websocket.Conn) {
 	}
 }
 
-func (s *StreamServiceServer) readLoop(ws *websocket.Conn, user *dto.User, room *dto.Room) {
+func (s *StreamService) readLoop(ws *websocket.Conn, user *dto.User, room *dto.Room) {
 	// buffer for reads, 128kb per connection
 	buf := make([]byte, 1024*128)
-	var opponent *UserStreamState
+	var opponent *UserState
 
 	// stream state fetch / creation
 
-	userState, roomState := s.stateProvider.GetUserStreamState(user, room)
+	userState, roomState := s.stateProvider.GetUserState(room, user)
 	if userState == nil {
 		ws.Close()
 		return
@@ -231,7 +252,7 @@ func (s *StreamServiceServer) readLoop(ws *websocket.Conn, user *dto.User, room 
 		if bytes.Equal(DataPacket, buf[:3]) {
 			if opponent.streamServer != nil {
 				// we ignore errors, it's safe
-				_ = opponent.streamServer.Send(&AVFrameData{
+				_ = opponent.streamServer.Send(&streams.AVFrameData{
 					UserUUID:  user.UUID.String(),
 					FrameData: buf[4:length],
 				})
@@ -242,7 +263,7 @@ func (s *StreamServiceServer) readLoop(ws *websocket.Conn, user *dto.User, room 
 	}
 }
 
-func (s *StreamServiceServer) userAndRoom(userStringUUID string, roomStringUUID string) (*dto.User, *dto.Room, error) {
+func (s *StreamService) userAndRoom(userStringUUID string, roomStringUUID string) (*dto.User, *dto.Room, error) {
 	user, err := s.authService.GetUserByString(userStringUUID)
 	if err != nil {
 		return nil, nil, err
@@ -254,9 +275,14 @@ func (s *StreamServiceServer) userAndRoom(userStringUUID string, roomStringUUID 
 	return user, room, nil
 }
 
-func NewStreamServiceServer(roomService *services.RoomService, authService *services.AuthService) *StreamServiceServer {
-	return &StreamServiceServer{
-		roomService: roomService,
-		authService: authService,
+func NewStreamService(
+	roomService *RoomService,
+	authService *AuthService,
+	provider *RoomStateProvider,
+) *StreamService {
+	return &StreamService{
+		stateProvider: provider,
+		roomService:   roomService,
+		authService:   authService,
 	}
 }

@@ -26,9 +26,9 @@ export interface IChatClient {
      */
     sendMessage(input: SendMessageRequest, options?: RpcOptions): UnaryCall<SendMessageRequest, Empty>;
     /**
-     * @generated from protobuf rpc: ListenRequest(AuthRequest) returns (stream ChatMessage);
+     * @generated from protobuf rpc: Listen(AuthRequest) returns (stream ChatMessage);
      */
-    listenRequest(input: AuthRequest, options?: RpcOptions): ServerStreamingCall<AuthRequest, ChatMessage>;
+    listen(input: AuthRequest, options?: RpcOptions): ServerStreamingCall<AuthRequest, ChatMessage>;
 }
 /**
  * @generated from protobuf service Chat
@@ -54,9 +54,9 @@ export class ChatClient implements IChatClient, ServiceInfo {
         return stackIntercept<SendMessageRequest, Empty>("unary", this._transport, method, opt, input);
     }
     /**
-     * @generated from protobuf rpc: ListenRequest(AuthRequest) returns (stream ChatMessage);
+     * @generated from protobuf rpc: Listen(AuthRequest) returns (stream ChatMessage);
      */
-    listenRequest(input: AuthRequest, options?: RpcOptions): ServerStreamingCall<AuthRequest, ChatMessage> {
+    listen(input: AuthRequest, options?: RpcOptions): ServerStreamingCall<AuthRequest, ChatMessage> {
         const method = this.methods[2], opt = this._transport.mergeOptions(options);
         return stackIntercept<AuthRequest, ChatMessage>("serverStreaming", this._transport, method, opt, input);
     }

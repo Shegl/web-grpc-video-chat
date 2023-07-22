@@ -69,7 +69,7 @@ const ChatForm = () => {
     };
 
     const listenForMessages = async () => {
-        let stream = client.listenRequest(authRequest);
+        let stream = client.listen(authRequest);
         for await (let message of stream.responses) {
             addMessage(message);
             updateChatView();
