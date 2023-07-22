@@ -94,11 +94,11 @@ func (s *ChatService) MakeChatState(room *dto.Room) *ChatState {
 			state.mu.Unlock()
 			roomState := s.roomStateProvider.GetRoomState(room)
 			if roomState != nil {
-				if roomState.author.chatServer != nil {
-					roomState.author.chatServer.Send(message)
+				if roomState.author.chatStream.stream != nil {
+					roomState.author.chatStream.stream.Send(message)
 				}
-				if roomState.guest != nil && roomState.guest.chatServer != nil {
-					roomState.guest.chatServer.Send(message)
+				if roomState.guest != nil && roomState.guest.chatStream.stream != nil {
+					roomState.guest.chatStream.stream.Send(message)
 				}
 			}
 		}
@@ -148,14 +148,22 @@ func (s *ChatService) Listen(request *chat.AuthRequest, stream chat.Chat_ListenS
 	if err != nil {
 		return err
 	}
-	err = state.RoomChatConnected(user, stream)
+	closeConnCh, err := state.RoomChatConnected(user, stream)
 	if err != nil {
 		return err
 	}
 
 	select {
-	case <-stream.Context().Done():
 	case <-state.roomCtx.Done():
+		stream.Send(&chat.ChatMessage{
+			UUID:     uuid.NewString(),
+			UserUUID: uuid.NewString(),
+			UserName: "Server",
+			Time:     0,
+			Msg:      "Room closed. You will be redirected. Bye! ",
+		})
+	case <-closeConnCh:
+	case <-stream.Context().Done():
 	}
 
 	return nil

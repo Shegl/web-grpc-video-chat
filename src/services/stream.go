@@ -129,14 +129,22 @@ func (s *StreamService) StreamState(userRequest *streams.User, stream streams.St
 	if room == nil {
 		return nil
 	}
-
 	roomState := s.stateProvider.GetRoomState(room)
-	if roomState != nil && roomState.StateStreamConnected(user, stream) == nil {
-		s.SendStateUpdate(roomState)
-		select {
-		case <-stream.Context().Done():
-		case <-roomState.roomCtx.Done():
-		}
+	if roomState == nil {
+		return nil
+	}
+
+	closeConnCh, err := roomState.StateStreamConnected(user, stream)
+	if err != nil {
+		return err
+	}
+
+	roomState.UpdateUserStreamState(user, userRequest)
+	s.SendStateUpdate(roomState)
+	select {
+	case <-closeConnCh:
+	case <-stream.Context().Done():
+	case <-roomState.roomCtx.Done():
 	}
 
 	return nil
@@ -151,17 +159,23 @@ func (s *StreamService) AVStream(userRequest *streams.User, stream streams.Strea
 	if room == nil {
 		return nil
 	}
-
 	roomState := s.stateProvider.GetRoomState(room)
-	if roomState != nil && roomState.AVStreamConnected(user, stream) == nil {
-		roomState.UpdateUserStreamState(user, userRequest)
-		s.SendStateUpdate(roomState)
-		select {
-		case <-stream.Context().Done():
-		case <-roomState.roomCtx.Done():
-		}
+	if roomState == nil {
+		return nil
 	}
 
+	closeConnCh, err := roomState.AVStreamConnected(user, stream)
+	if err != nil {
+		return err
+	}
+
+	roomState.UpdateUserStreamState(user, userRequest)
+	s.SendStateUpdate(roomState)
+	select {
+	case <-closeConnCh:
+	case <-stream.Context().Done():
+	case <-roomState.roomCtx.Done():
+	}
 	return nil
 }
 
@@ -171,17 +185,17 @@ func (s *StreamService) SendStateUpdate(roomState *RoomState) {
 	stateMessage := &streams.StateMessage{
 		Time:   time.Now().Unix(),
 		UUID:   uuid.NewString(),
-		Author: roomState.author.streamState,
+		Author: roomState.author.state,
 		Guest:  nil,
 	}
 	if roomState.guest != nil {
-		stateMessage.Guest = roomState.guest.streamState
+		stateMessage.Guest = roomState.guest.state
 	}
-	if roomState.author.stateServer != nil {
-		roomState.author.stateServer.Send(stateMessage)
+	if roomState.author.stateStream.stream != nil {
+		roomState.author.stateStream.stream.Send(stateMessage)
 	}
-	if roomState.guest != nil && roomState.guest.stateServer != nil {
-		roomState.guest.stateServer.Send(stateMessage)
+	if roomState.guest != nil && roomState.guest.stateStream.stream != nil {
+		roomState.guest.stateStream.stream.Send(stateMessage)
 	}
 }
 
@@ -221,10 +235,10 @@ func (s *StreamService) readLoop(ws *websocket.Conn, user *dto.User, room *dto.R
 
 	// some bad design magic, can be really improved much better
 	roomState.mu.Lock()
-	if userState.stream != nil {
-		userState.stream.Close()
+	if userState.inputStream != nil {
+		userState.inputStream.Close()
 	}
-	userState.stream = ws
+	userState.inputStream = ws
 	if userState == roomState.author {
 		opponent = roomState.guest
 	} else {
@@ -258,9 +272,9 @@ func (s *StreamService) readLoop(ws *websocket.Conn, user *dto.User, room *dto.R
 		}
 		// AV Data came need resend to grpc web stream
 		if bytes.Equal(DataPacket, buf[:3]) {
-			if opponent.streamServer != nil {
+			if opponent.outputStream.stream != nil {
 				// we ignore errors, it's safe
-				_ = opponent.streamServer.Send(&streams.AVFrameData{
+				_ = opponent.outputStream.stream.Send(&streams.AVFrameData{
 					UserUUID:  user.UUID.String(),
 					FrameData: buf[4:length],
 				})
