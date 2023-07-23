@@ -73,9 +73,9 @@ func (r *RoomStateProvider) Forget(roomState *RoomState) {
 		time.Sleep(time.Second * 10)
 		// close channels
 		// for author
-		close(state.guest.chatStream.closeCh)
-		close(state.guest.stateStream.closeCh)
-		close(state.guest.outputStream.closeCh)
+		close(state.author.chatStream.closeCh)
+		close(state.author.stateStream.closeCh)
+		close(state.author.outputStream.closeCh)
 		close(state.chat.msgChan)
 	}(roomState)
 }

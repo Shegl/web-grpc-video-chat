@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"golang.org/x/net/websocket"
-	"log"
 	"sync"
 	"web-grpc-video-chat/src/dto"
 	"web-grpc-video-chat/src/inroom/chat"
@@ -102,12 +101,9 @@ func (roomState *RoomState) RoomChatConnect(
 	defer roomState.mu.Unlock()
 	userState := roomState.getUserState(user)
 	if userState != nil {
-		log.Println("Trying to close now previous channel")
-		close(userState.stateStream.closeCh)
+		close(userState.chatStream.closeCh)
 		userState.chatStream.stream = server
-		userState.chatStream.closeCh = nil
 		userState.chatStream.closeCh = make(chan struct{})
-		log.Println("Channel created")
 		return userState.chatStream.closeCh, nil
 	}
 	return nil, errors.New("Cant update state, user not in room. ")
