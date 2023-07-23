@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "web-grpc-video-chat/src/chat";
+option go_package = "web-grpc-video-chat/src/inroom/chat";
 
 service Chat {
   rpc GetHistory(AuthRequest) returns (HistoryResponse);

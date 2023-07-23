@@ -58,6 +58,10 @@ export interface User {
      * @generated from protobuf field: string UserName = 4 [json_name = "UserName"];
      */
     userName: string;
+    /**
+     * @generated from protobuf field: string UserRoom = 5 [json_name = "UserRoom"];
+     */
+    userRoom: string;
 }
 /**
  * @generated from protobuf message AVFrameData
@@ -173,11 +177,12 @@ class User$Type extends MessageType<User> {
             { no: 1, name: "IsCamEnabled", kind: "scalar", jsonName: "IsCamEnabled", T: 8 /*ScalarType.BOOL*/ },
             { no: 2, name: "IsMuted", kind: "scalar", jsonName: "IsMuted", T: 8 /*ScalarType.BOOL*/ },
             { no: 3, name: "UserUUID", kind: "scalar", jsonName: "UserUUID", T: 9 /*ScalarType.STRING*/ },
-            { no: 4, name: "UserName", kind: "scalar", jsonName: "UserName", T: 9 /*ScalarType.STRING*/ }
+            { no: 4, name: "UserName", kind: "scalar", jsonName: "UserName", T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "UserRoom", kind: "scalar", jsonName: "UserRoom", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<User>): User {
-        const message = { isCamEnabled: false, isMuted: false, userUUID: "", userName: "" };
+        const message = { isCamEnabled: false, isMuted: false, userUUID: "", userName: "", userRoom: "" };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
             reflectionMergePartial<User>(this, message, value);
@@ -199,6 +204,9 @@ class User$Type extends MessageType<User> {
                     break;
                 case /* string UserName = 4 [json_name = "UserName"];*/ 4:
                     message.userName = reader.string();
+                    break;
+                case /* string UserRoom = 5 [json_name = "UserRoom"];*/ 5:
+                    message.userRoom = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -224,6 +232,9 @@ class User$Type extends MessageType<User> {
         /* string UserName = 4 [json_name = "UserName"]; */
         if (message.userName !== "")
             writer.tag(4, WireType.LengthDelimited).string(message.userName);
+        /* string UserRoom = 5 [json_name = "UserRoom"]; */
+        if (message.userRoom !== "")
+            writer.tag(5, WireType.LengthDelimited).string(message.userRoom);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

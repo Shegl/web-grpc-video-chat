@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "web-grpc-video-chat/src/streams";
+option go_package = "web-grpc-video-chat/src/inroom/stream";
 
 service Stream {
   rpc StreamState(User) returns (stream StateMessage);
@@ -22,6 +22,7 @@ message User {
   bool IsMuted = 2;
   string UserUUID = 3;
   string UserName = 4;
+  string UserRoom = 5;
 }
 
 message AVFrameData {

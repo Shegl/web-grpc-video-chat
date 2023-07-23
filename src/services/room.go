@@ -5,11 +5,11 @@ import (
 	"github.com/google/uuid"
 	"sync"
 	"web-grpc-video-chat/src/dto"
+	"web-grpc-video-chat/src/inroom"
 )
 
 type RoomService struct {
-	roomStateProvider *RoomStateProvider
-	chatService       *ChatService
+	stateProvider *inroom.RoomStateProvider
 
 	rooms    map[uuid.UUID]*dto.Room
 	asAuthor map[uuid.UUID]*dto.Room
@@ -44,7 +44,7 @@ func (r *RoomService) create(user *dto.User) *dto.Room {
 	r.rooms[room.UUID] = room
 	r.asAuthor[user.UUID] = room
 
-	r.roomStateProvider.MakeRoomState(room, r.chatService.MakeChatState(room))
+	r.stateProvider.MakeRoomState(room)
 
 	return room
 }
@@ -75,7 +75,7 @@ func (r *RoomService) Join(roomUUID uuid.UUID, user *dto.User) (*dto.Room, error
 
 func (r *RoomService) join(roomUUID uuid.UUID, user *dto.User) *dto.Room {
 	if room, exists := r.rooms[roomUUID]; exists {
-		roomState := r.roomStateProvider.GetRoomState(room)
+		roomState := r.stateProvider.GetRoomState(room)
 		if roomState == nil {
 			// room in state of deletion
 			return nil
@@ -107,12 +107,12 @@ func (r *RoomService) Leave(user *dto.User) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if room, exists := r.asAuthor[user.UUID]; exists {
-		roomState := r.roomStateProvider.GetRoomState(room)
+		roomState := r.stateProvider.GetRoomState(room)
 		if room.Guest != nil {
 			r.leave(room.Guest)
 		}
 		if roomState != nil {
-			r.roomStateProvider.Forget(roomState)
+			r.stateProvider.Forget(roomState)
 		}
 		delete(r.rooms, room.UUID)
 		delete(r.asAuthor, user.UUID)
@@ -123,7 +123,7 @@ func (r *RoomService) Leave(user *dto.User) {
 
 func (r *RoomService) leave(user *dto.User) {
 	if room, exists := r.asGuest[user.UUID]; exists {
-		roomState := r.roomStateProvider.GetRoomState(room)
+		roomState := r.stateProvider.GetRoomState(room)
 		if roomState != nil {
 			roomState.LeaveRoomUpdate(user)
 		}
@@ -144,10 +144,9 @@ func (r *RoomService) GetRoom(user *dto.User, stringUUID string) (*dto.Room, err
 	return nil, errors.New("Wrong room. ")
 }
 
-func NewRoomService(provider *RoomStateProvider, chatService *ChatService) *RoomService {
+func NewRoomService(provider *inroom.RoomStateProvider) *RoomService {
 	return &RoomService{
-		roomStateProvider: provider,
-		chatService:       chatService,
+		stateProvider: provider,
 
 		rooms:    make(map[uuid.UUID]*dto.Room),
 		asAuthor: make(map[uuid.UUID]*dto.Room),

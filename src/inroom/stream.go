@@ -1,4 +1,4 @@
-package services
+package inroom
 
 import (
 	"bytes"
@@ -15,42 +15,37 @@ import (
 	"sync"
 	"time"
 	"web-grpc-video-chat/src/dto"
-	"web-grpc-video-chat/src/streams"
+	"web-grpc-video-chat/src/inroom/stream"
 )
 
 var PingPacket = []byte{0x50, 0x49, 0x4e, 0x47}
 var PongPacket = []byte{0x50, 0x4f, 0x4e, 0x47}
 var DataPacket = []byte{0x44, 0x41, 0x54, 0x41}
 
-// StreamService : we will use websockets to accept stream from user
+// StreamServer : we will use websockets to accept stream from user
 // because stream server on browser is not working
-type StreamService struct {
-	streams.UnimplementedStreamServer
-	roomService *RoomService
-	authService *AuthService
-
-	addr string
-
-	wg *sync.WaitGroup
-
+type StreamServer struct {
+	wg            *sync.WaitGroup
 	stateProvider *RoomStateProvider
+	addr          string
+	stream.UnimplementedStreamServer
 }
 
-func (s *StreamService) Init(addr string, wg *sync.WaitGroup) error {
+func (s *StreamServer) Init(addr string, wg *sync.WaitGroup) error {
 	s.addr = addr
 	s.wg = wg
 
 	return nil
 }
 
-func (s *StreamService) Run(ctx context.Context) error {
+func (s *StreamServer) Run(ctx context.Context) error {
 	s.wg.Add(1)
 
 	log.Println("StreamServiceServer:: starting")
 
 	// we create grpc without tls, envoy will terminate it
 	grpcServer := grpc.NewServer()
-	streams.RegisterStreamServer(grpcServer, s)
+	stream.RegisterStreamServer(grpcServer, s)
 
 	ln, err := net.Listen("tcp", s.addr)
 	if err != nil {
@@ -103,151 +98,125 @@ func (s *StreamService) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *StreamService) ChangeState(ctx context.Context, userRequest *streams.User) (*streams.Ack, error) {
-	user, err := s.authService.GetUserByString(userRequest.UserUUID)
+func (s *StreamServer) ChangeState(ctx context.Context, userRequest *stream.User) (*stream.Ack, error) {
+	state, user, err := s.stateProvider.GetByUserAndRoom(userRequest.GetUserUUID(), userRequest.GetUserRoom())
 	if err != nil {
 		return nil, err
 	}
-	room := s.roomService.State(user)
-	if room != nil {
-		roomState := s.stateProvider.GetRoomState(room)
-		if roomState != nil {
-			roomState.UpdateUserStreamState(user, userRequest)
-			s.SendStateUpdate(roomState)
-		}
-	}
 
-	return &streams.Ack{}, nil
+	state.UpdateUserStreamState(user, userRequest)
+	s.SendStateUpdate(state)
+
+	return &stream.Ack{}, nil
 }
 
-func (s *StreamService) StreamState(userRequest *streams.User, stream streams.Stream_StreamStateServer) error {
-	user, err := s.authService.GetUserByString(userRequest.UserUUID)
-	if err != nil {
-		return err
-	}
-	room := s.roomService.State(user)
-	if room == nil {
-		return nil
-	}
-	roomState := s.stateProvider.GetRoomState(room)
-	if roomState == nil {
-		return nil
-	}
-
-	closeConnCh, err := roomState.StateStreamConnected(user, stream)
+func (s *StreamServer) StreamState(userRequest *stream.User, stream stream.Stream_StreamStateServer) error {
+	state, user, err := s.stateProvider.GetByUserAndRoom(userRequest.GetUserUUID(), userRequest.GetUserRoom())
 	if err != nil {
 		return err
 	}
 
-	roomState.UpdateUserStreamState(user, userRequest)
-	s.SendStateUpdate(roomState)
+	closeConnCh, err := state.StateStreamConnect(user, stream)
+	if err != nil {
+		return err
+	}
+
+	state.UpdateUserStreamState(user, userRequest)
+	s.SendStateUpdate(state)
+
 	select {
 	case <-closeConnCh:
 	case <-stream.Context().Done():
-	case <-roomState.roomCtx.Done():
+	case <-state.roomCtx.Done():
 	}
 
 	return nil
 }
 
-func (s *StreamService) AVStream(userRequest *streams.User, stream streams.Stream_AVStreamServer) error {
-	user, err := s.authService.GetUserByString(userRequest.UserUUID)
-	if err != nil {
-		return err
-	}
-	room := s.roomService.State(user)
-	if room == nil {
-		return nil
-	}
-	roomState := s.stateProvider.GetRoomState(room)
-	if roomState == nil {
-		return nil
-	}
-
-	closeConnCh, err := roomState.AVStreamConnected(user, stream)
+func (s *StreamServer) AVStream(userRequest *stream.User, stream stream.Stream_AVStreamServer) error {
+	state, user, err := s.stateProvider.GetByUserAndRoom(userRequest.GetUserUUID(), userRequest.GetUserRoom())
 	if err != nil {
 		return err
 	}
 
-	roomState.UpdateUserStreamState(user, userRequest)
-	s.SendStateUpdate(roomState)
+	closeConnCh, err := state.AVStreamConnect(user, stream)
+	if err != nil {
+		return err
+	}
+
+	state.UpdateUserStreamState(user, userRequest)
+	s.SendStateUpdate(state)
+
 	select {
 	case <-closeConnCh:
 	case <-stream.Context().Done():
-	case <-roomState.roomCtx.Done():
+	case <-state.roomCtx.Done():
 	}
 	return nil
 }
 
-func (s *StreamService) SendStateUpdate(roomState *RoomState) {
-	roomState.mu.RLock()
-	defer roomState.mu.RUnlock()
-	stateMessage := &streams.StateMessage{
+func (s *StreamServer) SendStateUpdate(state *RoomState) {
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+	stateMessage := &stream.StateMessage{
 		Time:   time.Now().Unix(),
 		UUID:   uuid.NewString(),
-		Author: roomState.author.state,
+		Author: state.author.state,
 		Guest:  nil,
 	}
-	if roomState.guest != nil {
-		stateMessage.Guest = roomState.guest.state
+	if state.guest != nil {
+		stateMessage.Guest = state.guest.state
 	}
-	if roomState.author.stateStream.stream != nil {
-		roomState.author.stateStream.stream.Send(stateMessage)
+	if state.author.stateStream.stream != nil {
+		state.author.stateStream.stream.Send(stateMessage)
 	}
-	if roomState.guest != nil && roomState.guest.stateStream.stream != nil {
-		roomState.guest.stateStream.stream.Send(stateMessage)
+	if state.guest != nil && state.guest.stateStream.stream != nil {
+		state.guest.stateStream.stream.Send(stateMessage)
 	}
 }
 
-func (s *StreamService) handleWS(ws *websocket.Conn) {
+func (s *StreamServer) handleWS(ws *websocket.Conn) {
 	userUUID := string([]byte(ws.Request().URL.Path)[17:53])
 	roomUUID := string([]byte(ws.Request().URL.Path)[54:])
-	user, room, err := s.userAndRoom(userUUID, roomUUID)
+	state, user, err := s.stateProvider.GetByUserAndRoom(userUUID, roomUUID)
 	if err != nil {
 		ws.Close()
 	} else {
-		if room.Guest == user || room.Author == user {
-			go s.readLoop(ws, user, room)
+		if state.author.user == user || state.guest != nil && state.guest.user == user {
+			go s.readLoop(ws, state, user)
 		} else {
 			ws.Close()
 		}
 	}
 }
 
-func (s *StreamService) readLoop(ws *websocket.Conn, user *dto.User, room *dto.Room) {
+func (s *StreamServer) readLoop(ws *websocket.Conn, state *RoomState, user *dto.User) {
 	// buffer for reads, 128kb per connection
 	buf := make([]byte, 1024*128)
 	var opponent *UserState
 
-	// stream state fetch / creation
-	roomState := s.stateProvider.GetRoomState(room)
-	if roomState == nil {
-		ws.Close()
-		return
-	}
-
 	// can we fetch userState
-	userState := roomState.GetUserState(user)
+	userState := state.GetUserState(user)
 	if userState == nil {
 		ws.Close()
 		return
 	}
 
 	// some bad design magic, can be really improved much better
-	roomState.mu.Lock()
+	state.mu.Lock()
 	if userState.inputStream != nil {
 		userState.inputStream.Close()
 	}
 	userState.inputStream = ws
-	if userState == roomState.author {
-		opponent = roomState.guest
+	if userState == state.author {
+		opponent = state.guest
 	} else {
-		opponent = roomState.author
+		opponent = state.author
 	}
-	roomState.mu.Unlock()
+	state.mu.Unlock()
 
 	go func() {
-		<-roomState.roomCtx.Done()
+		<-state.roomCtx.Done()
 		ws.Close()
 	}()
 
@@ -274,7 +243,7 @@ func (s *StreamService) readLoop(ws *websocket.Conn, user *dto.User, room *dto.R
 		if bytes.Equal(DataPacket, buf[:3]) {
 			if opponent.outputStream.stream != nil {
 				// we ignore errors, it's safe
-				_ = opponent.outputStream.stream.Send(&streams.AVFrameData{
+				_ = opponent.outputStream.stream.Send(&stream.AVFrameData{
 					UserUUID:  user.UUID.String(),
 					FrameData: buf[4:length],
 				})
@@ -285,26 +254,10 @@ func (s *StreamService) readLoop(ws *websocket.Conn, user *dto.User, room *dto.R
 	}
 }
 
-func (s *StreamService) userAndRoom(userStringUUID string, roomStringUUID string) (*dto.User, *dto.Room, error) {
-	user, err := s.authService.GetUserByString(userStringUUID)
-	if err != nil {
-		return nil, nil, err
-	}
-	room, err := s.roomService.GetRoom(user, roomStringUUID)
-	if err != nil {
-		return nil, nil, err
-	}
-	return user, room, nil
-}
-
-func NewStreamService(
-	roomService *RoomService,
-	authService *AuthService,
+func NewStreamServer(
 	provider *RoomStateProvider,
-) *StreamService {
-	return &StreamService{
+) *StreamServer {
+	return &StreamServer{
 		stateProvider: provider,
-		roomService:   roomService,
-		authService:   authService,
 	}
 }

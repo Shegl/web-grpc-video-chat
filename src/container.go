@@ -5,6 +5,7 @@ import (
 	"web-grpc-video-chat/src/http"
 	"web-grpc-video-chat/src/http/controllers"
 	"web-grpc-video-chat/src/http/middleware"
+	"web-grpc-video-chat/src/inroom"
 	"web-grpc-video-chat/src/services"
 )
 
@@ -18,11 +19,11 @@ func BuildContainer() *dig.Container {
 
 	processError(container.Provide(middleware.NewCorsMiddleware))
 
-	processError(container.Provide(services.NewRoomStateProvider))
+	processError(container.Provide(inroom.NewRoomStateProvider))
 	processError(container.Provide(services.NewAuthService))
 	processError(container.Provide(services.NewRoomService))
-	processError(container.Provide(services.NewChatService))
-	processError(container.Provide(services.NewStreamService))
+	processError(container.Provide(inroom.NewChatServer))
+	processError(container.Provide(inroom.NewStreamServer))
 
 	return container
 }

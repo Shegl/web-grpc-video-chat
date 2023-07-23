@@ -8,13 +8,13 @@ import (
 	"sync"
 	"syscall"
 	"web-grpc-video-chat/src/http"
-	"web-grpc-video-chat/src/services"
+	"web-grpc-video-chat/src/inroom"
 )
 
 type Application struct {
 	webServer    *http.WebServer
-	chatServer   *services.ChatService
-	streamServer *services.StreamService
+	chatServer   *inroom.ChatServer
+	streamServer *inroom.StreamServer
 	wg           sync.WaitGroup
 	sigs         chan os.Signal
 	shutdownChan chan struct{}
@@ -31,21 +31,9 @@ func (a *Application) Init(version string) error {
 
 	signal.Notify(a.sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	a.webServer.Init(
-		":3000",
-		&a.wg,
-		a.shutdownChan,
-	)
-
-	a.chatServer.Init(
-		":3001",
-		&a.wg,
-	)
-
-	a.streamServer.Init(
-		":3002",
-		&a.wg,
-	)
+	a.webServer.Init(":3000", &a.wg, a.shutdownChan)
+	a.chatServer.Init(":3001", &a.wg)
+	a.streamServer.Init(":3002", &a.wg)
 
 	log.Println("application:: Init() :: init complete")
 	return nil
@@ -90,8 +78,8 @@ func (a *Application) processSignals(cancelFunc context.CancelFunc) {
 
 func NewApplication(
 	webServer *http.WebServer,
-	chatServer *services.ChatService,
-	streamServer *services.StreamService,
+	chatServer *inroom.ChatServer,
+	streamServer *inroom.StreamServer,
 ) *Application {
 	return &Application{
 		webServer:    webServer,
