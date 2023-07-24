@@ -9,7 +9,7 @@ import (
 	"net"
 	"sync"
 	"time"
-	chat2 "web-grpc-video-chat/src/inroom/chat"
+	"web-grpc-video-chat/src/inroom/chat"
 )
 
 type ChatServer struct {
@@ -19,7 +19,7 @@ type ChatServer struct {
 	wg    *sync.WaitGroup
 	mu    sync.RWMutex
 	chats map[uuid.UUID]*ChatState
-	chat2.UnimplementedChatServer
+	chat.UnimplementedChatServer
 }
 
 func (s *ChatServer) Init(addr string, wg *sync.WaitGroup) error {
@@ -36,7 +36,7 @@ func (s *ChatServer) Run(ctx context.Context) error {
 
 	// we create grpc without tls, envoy will terminate it
 	grpcServer := grpc.NewServer()
-	chat2.RegisterChatServer(grpcServer, s)
+	chat.RegisterChatServer(grpcServer, s)
 
 	ln, err := net.Listen("tcp", s.addr)
 	if err != nil {
@@ -57,7 +57,7 @@ func (s *ChatServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *ChatServer) GetHistory(ctx context.Context, request *chat2.AuthRequest) (*chat2.HistoryResponse, error) {
+func (s *ChatServer) GetHistory(ctx context.Context, request *chat.AuthRequest) (*chat.HistoryResponse, error) {
 	// we must check User and Room permissions
 	state, _, err := s.stateProvider.GetByUserAndRoom(request.GetUUID(), request.GetChatUUID())
 	if err != nil {
@@ -66,12 +66,12 @@ func (s *ChatServer) GetHistory(ctx context.Context, request *chat2.AuthRequest)
 	}
 	state.chat.mu.RLock()
 	defer state.chat.mu.RUnlock()
-	return &chat2.HistoryResponse{
+	return &chat.HistoryResponse{
 		Messages: state.chat.messages,
 	}, nil
 }
 
-func (s *ChatServer) SendMessage(ctx context.Context, request *chat2.SendMessageRequest) (*chat2.Empty, error) {
+func (s *ChatServer) SendMessage(ctx context.Context, request *chat.SendMessageRequest) (*chat.Empty, error) {
 	// we must check User and Room correctness
 	state, user, err := s.stateProvider.GetByUserAndRoom(
 		request.GetAuthData().GetUUID(),
@@ -81,10 +81,10 @@ func (s *ChatServer) SendMessage(ctx context.Context, request *chat2.SendMessage
 		return nil, err
 	}
 	if request.GetMsg() == "" {
-		return &chat2.Empty{}, nil
+		return &chat.Empty{}, nil
 	}
 	// all fine, lets proceed
-	chatMessage := &chat2.ChatMessage{
+	chatMessage := &chat.ChatMessage{
 		UUID:     uuid.New().String(),
 		UserUUID: user.UUID.String(),
 		UserName: user.Name,
@@ -94,10 +94,10 @@ func (s *ChatServer) SendMessage(ctx context.Context, request *chat2.SendMessage
 
 	state.chat.msgChan <- chatMessage
 
-	return &chat2.Empty{}, nil
+	return &chat.Empty{}, nil
 }
 
-func (s *ChatServer) Listen(request *chat2.AuthRequest, stream chat2.Chat_ListenServer) error {
+func (s *ChatServer) Listen(request *chat.AuthRequest, stream chat.Chat_ListenServer) error {
 	state, user, err := s.stateProvider.GetByUserAndRoom(request.GetUUID(), request.GetChatUUID())
 	if err != nil {
 		return err
@@ -109,7 +109,7 @@ func (s *ChatServer) Listen(request *chat2.AuthRequest, stream chat2.Chat_Listen
 
 	select {
 	case <-state.roomCtx.Done():
-		stream.Send(&chat2.ChatMessage{
+		stream.Send(&chat.ChatMessage{
 			UUID:     uuid.NewString(),
 			UserUUID: uuid.NewString(),
 			UserName: "Server",

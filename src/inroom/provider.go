@@ -60,23 +60,24 @@ func (r *RoomStateProvider) GetByUserAndRoom(
 
 func (r *RoomStateProvider) Forget(roomState *RoomState) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	roomState.mu.Lock()
-	defer roomState.mu.Unlock()
+	defer func() {
+		roomState.mu.Unlock()
+		r.mu.Unlock()
+	}()
 	if !roomState.isAlive {
 		return
 	}
 	roomState.isAlive = false
 	roomState.Close()
 	delete(r.roomStates, roomState.room.UUID)
+	if roomState.guest != nil {
+		roomState.closeChannels(roomState.guest.user)
+	}
 	go func(state *RoomState) {
-		time.Sleep(time.Second * 10)
-		// close channels
-		// for author
-		close(state.author.chatStream.closeCh)
-		close(state.author.stateStream.closeCh)
-		close(state.author.outputStream.closeCh)
-		close(state.chat.msgChan)
+		time.Sleep(time.Second * 5)
+		state.closeChannels(state.author.user)
+		close(roomState.chat.msgChan)
 	}(roomState)
 }
 

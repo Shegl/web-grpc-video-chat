@@ -144,11 +144,21 @@ func (roomState *RoomState) StateStreamConnect(
 func (roomState *RoomState) LeaveRoomUpdate(guest *dto.User) {
 	roomState.mu.Lock()
 	defer roomState.mu.Unlock()
-	if roomState.guest.user == guest {
+	roomState.closeChannels(guest)
+}
+
+func (roomState *RoomState) closeChannels(user *dto.User) {
+	if roomState.guest != nil && roomState.guest.user == user {
 		close(roomState.guest.chatStream.closeCh)
 		close(roomState.guest.stateStream.closeCh)
 		close(roomState.guest.outputStream.closeCh)
 		roomState.guest = nil
+	}
+	if roomState.author.user == user {
+		close(roomState.author.chatStream.closeCh)
+		close(roomState.author.stateStream.closeCh)
+		close(roomState.author.outputStream.closeCh)
+		roomState.author = nil
 	}
 }
 

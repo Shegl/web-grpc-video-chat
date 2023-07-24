@@ -108,11 +108,11 @@ func (r *RoomService) Leave(user *dto.User) {
 	defer r.mu.Unlock()
 	if room, exists := r.asAuthor[user.UUID]; exists {
 		roomState := r.stateProvider.GetRoomState(room)
-		if room.Guest != nil {
-			r.leave(room.Guest)
-		}
 		if roomState != nil {
 			r.stateProvider.Forget(roomState)
+		}
+		if room.Guest != nil {
+			r.leave(room.Guest)
 		}
 		delete(r.rooms, room.UUID)
 		delete(r.asAuthor, user.UUID)
