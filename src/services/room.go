@@ -111,9 +111,6 @@ func (r *RoomService) Leave(user *dto.User) {
 		if roomState != nil {
 			r.stateProvider.Forget(roomState)
 		}
-		if room.Guest != nil {
-			r.leave(room.Guest)
-		}
 		delete(r.rooms, room.UUID)
 		delete(r.asAuthor, user.UUID)
 		return
