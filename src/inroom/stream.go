@@ -69,7 +69,7 @@ func (s *StreamServer) Run(ctx context.Context) error {
 		Handler: mux,
 	}
 
-	// Websockets listen and server
+	// Websockets listen and serve
 	go func() {
 		err = server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
@@ -104,7 +104,7 @@ func (s *StreamServer) ChangeState(ctx context.Context, userRequest *stream.User
 		return nil, err
 	}
 
-	state.UpdateUserStreamState(user, userRequest)
+	state.UpdateUserState(user, userRequest)
 	s.SendStateUpdate(state)
 
 	return &stream.Ack{}, nil
@@ -121,7 +121,7 @@ func (s *StreamServer) StreamState(userRequest *stream.User, stream stream.Strea
 		return err
 	}
 
-	state.UpdateUserStreamState(user, userRequest)
+	state.UpdateUserState(user, userRequest)
 	s.SendStateUpdate(state)
 
 	select {
@@ -144,7 +144,7 @@ func (s *StreamServer) AVStream(userRequest *stream.User, stream stream.Stream_A
 		return err
 	}
 
-	state.UpdateUserStreamState(user, userRequest)
+	state.UpdateUserState(user, userRequest)
 	s.SendStateUpdate(state)
 
 	select {

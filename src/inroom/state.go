@@ -3,7 +3,6 @@ package inroom
 import (
 	"context"
 	"errors"
-	"github.com/google/uuid"
 	"golang.org/x/net/websocket"
 	"sync"
 	"web-grpc-video-chat/src/dto"
@@ -23,20 +22,20 @@ type RoomState struct {
 	Close   func()
 }
 
-type UserState struct {
-	user         *dto.User
-	state        *stream.User
-	inputStream  *websocket.Conn
-	outputStream *AVStream
-	stateStream  *StateStream
-	chatStream   *ChatStream
-}
-
-type ChatState struct {
-	room     *dto.Room
-	messages []*chat.ChatMessage
-	msgChan  chan *chat.ChatMessage
-	mu       sync.RWMutex
+func NewRoomState(room *dto.Room) *RoomState {
+	roomCtx, cancelFunc := context.WithCancel(context.Background())
+	roomState := &RoomState{
+		room:    room,
+		isAlive: true,
+		mu:      sync.RWMutex{},
+		author:  NewUserState(room.Author),
+		guest:   nil,
+		roomCtx: roomCtx,
+		Close:   cancelFunc,
+		chat:    nil,
+	}
+	AddChatState(roomState)
+	return roomState
 }
 
 type ChatStream struct {
@@ -54,7 +53,32 @@ type AVStream struct {
 	closeCh chan struct{}
 }
 
-func (roomState *RoomState) JoinRoomUpdate(guest *dto.User) error {
+type UserState struct {
+	user         *dto.User
+	state        *stream.User
+	inputStream  *websocket.Conn
+	outputStream *AVStream
+	stateStream  *StateStream
+	chatStream   *ChatStream
+}
+
+func NewUserState(user *dto.User) *UserState {
+	return &UserState{
+		user: user,
+		state: &stream.User{
+			IsCamEnabled: false,
+			IsMuted:      true,
+			UserUUID:     "",
+			UserName:     "",
+		},
+		inputStream:  nil,
+		outputStream: &AVStream{stream: nil, closeCh: make(chan struct{})},
+		stateStream:  &StateStream{stream: nil, closeCh: make(chan struct{})},
+		chatStream:   &ChatStream{stream: nil, closeCh: make(chan struct{})},
+	}
+}
+
+func (roomState *RoomState) JoinRoom(guest *dto.User) error {
 	roomState.mu.Lock()
 	defer roomState.mu.Unlock()
 	if roomState.guest != nil && roomState.guest.user != guest {
@@ -84,9 +108,9 @@ func (roomState *RoomState) getUserState(user *dto.User) *UserState {
 	return userState
 }
 
-func (roomState *RoomState) UpdateUserStreamState(user *dto.User, userStreamState *stream.User) {
-	roomState.mu.RLock()
-	defer roomState.mu.RUnlock()
+func (roomState *RoomState) UpdateUserState(user *dto.User, userStreamState *stream.User) {
+	roomState.mu.Lock()
+	defer roomState.mu.Unlock()
 	userState := roomState.getUserState(user)
 	if userState != nil {
 		userState.state = userStreamState
@@ -141,7 +165,7 @@ func (roomState *RoomState) StateStreamConnect(
 	return nil, errors.New("Cant update state, user not in room. ")
 }
 
-func (roomState *RoomState) LeaveRoomUpdate(guest *dto.User) {
+func (roomState *RoomState) LeaveRoom(guest *dto.User) {
 	roomState.mu.Lock()
 	defer roomState.mu.Unlock()
 	roomState.closeChannels(guest)
@@ -160,68 +184,4 @@ func (roomState *RoomState) closeChannels(user *dto.User) {
 		close(roomState.author.outputStream.closeCh)
 		roomState.author = nil
 	}
-}
-
-func NewUserState(user *dto.User) *UserState {
-	return &UserState{
-		user: user,
-		state: &stream.User{
-			IsCamEnabled: false,
-			IsMuted:      true,
-			UserUUID:     "",
-			UserName:     "",
-		},
-		inputStream:  nil,
-		outputStream: &AVStream{stream: nil, closeCh: make(chan struct{})},
-		stateStream:  &StateStream{stream: nil, closeCh: make(chan struct{})},
-		chatStream:   &ChatStream{stream: nil, closeCh: make(chan struct{})},
-	}
-}
-
-func NewRoomState(room *dto.Room) *RoomState {
-	roomCtx, cancelFunc := context.WithCancel(context.Background())
-	roomState := &RoomState{
-		room:    room,
-		isAlive: true,
-		mu:      sync.RWMutex{},
-		author:  NewUserState(room.Author),
-		guest:   nil,
-		roomCtx: roomCtx,
-		Close:   cancelFunc,
-		chat:    nil,
-	}
-	AddChatState(roomState)
-	return roomState
-}
-
-func AddChatState(roomState *RoomState) {
-	chatState := &ChatState{
-		room: roomState.room,
-		messages: []*chat.ChatMessage{{
-			UUID:     uuid.NewString(),
-			UserUUID: uuid.NewString(),
-			UserName: "Server",
-			Time:     0,
-			Msg:      "Welcome to chat",
-		}},
-		msgChan: make(chan *chat.ChatMessage, 4),
-	}
-	go func(state *ChatState) {
-		for {
-			message, ok := <-state.msgChan
-			if !ok {
-				return
-			}
-			state.mu.Lock()
-			state.messages = append(state.messages, message)
-			state.mu.Unlock()
-			if roomState.author.chatStream.stream != nil {
-				roomState.author.chatStream.stream.Send(message)
-			}
-			if roomState.guest != nil && roomState.guest.chatStream.stream != nil {
-				roomState.guest.chatStream.stream.Send(message)
-			}
-		}
-	}(chatState)
-	roomState.chat = chatState
 }

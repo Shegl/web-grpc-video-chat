@@ -9,6 +9,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"web-grpc-video-chat/src/dto"
 	"web-grpc-video-chat/src/inroom/chat"
 )
 
@@ -20,6 +21,13 @@ type ChatServer struct {
 	mu    sync.RWMutex
 	chats map[uuid.UUID]*ChatState
 	chat.UnimplementedChatServer
+}
+
+type ChatState struct {
+	room     *dto.Room
+	messages []*chat.ChatMessage
+	msgChan  chan *chat.ChatMessage
+	mu       sync.RWMutex
 }
 
 func (s *ChatServer) Init(addr string, wg *sync.WaitGroup) error {
@@ -126,4 +134,36 @@ func NewChatServer(provider *RoomStateProvider) *ChatServer {
 	return &ChatServer{
 		stateProvider: provider,
 	}
+}
+
+func AddChatState(roomState *RoomState) {
+	chatState := &ChatState{
+		room: roomState.room,
+		messages: []*chat.ChatMessage{{
+			UUID:     uuid.NewString(),
+			UserUUID: uuid.NewString(),
+			UserName: "Server",
+			Time:     0,
+			Msg:      "Welcome to chat",
+		}},
+		msgChan: make(chan *chat.ChatMessage, 4),
+	}
+	go func(state *ChatState) {
+		for {
+			message, ok := <-state.msgChan
+			if !ok {
+				return
+			}
+			state.mu.Lock()
+			state.messages = append(state.messages, message)
+			state.mu.Unlock()
+			if roomState.author.chatStream.stream != nil {
+				roomState.author.chatStream.stream.Send(message)
+			}
+			if roomState.guest != nil && roomState.guest.chatStream.stream != nil {
+				roomState.guest.chatStream.stream.Send(message)
+			}
+		}
+	}(chatState)
+	roomState.chat = chatState
 }

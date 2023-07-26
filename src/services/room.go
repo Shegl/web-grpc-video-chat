@@ -22,8 +22,7 @@ func (r *RoomService) Create(user *dto.User) (*dto.Room, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if room, exists := r.asAuthor[user.UUID]; exists {
-		// room already exists
-		// let user get back to his room,
+		// room already exists, let user get back to his room,
 		// if he needs new room, he will get that he needs leave his room first
 		return room, nil
 	}
@@ -80,7 +79,7 @@ func (r *RoomService) join(roomUUID uuid.UUID, user *dto.User) *dto.Room {
 			// room in state of deletion
 			return nil
 		}
-		err := roomState.JoinRoomUpdate(user)
+		err := roomState.JoinRoom(user)
 		if err != nil {
 			panic(err)
 		}
@@ -122,7 +121,7 @@ func (r *RoomService) leave(user *dto.User) {
 	if room, exists := r.asGuest[user.UUID]; exists {
 		roomState := r.stateProvider.GetRoomState(room)
 		if roomState != nil {
-			roomState.LeaveRoomUpdate(user)
+			roomState.LeaveRoom(user)
 		}
 		room.Guest = nil
 		delete(r.asGuest, user.UUID)
