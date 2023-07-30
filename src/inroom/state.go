@@ -97,6 +97,15 @@ func (roomState *RoomState) GetUserState(user *dto.User) *UserState {
 	return roomState.getUserState(user)
 }
 
+func (roomState *RoomState) GetOpponentDataStream(userState *UserState) stream.Stream_AVStreamServer {
+	roomState.mu.RLock()
+	defer roomState.mu.RUnlock()
+	if userState == roomState.author {
+		return roomState.guest.outputStream.stream
+	}
+	return roomState.guest.outputStream.stream
+}
+
 func (roomState *RoomState) getUserState(user *dto.User) *UserState {
 	var userState *UserState
 	if roomState.author.user == user {

@@ -122,7 +122,7 @@ func (s *ChatServer) Listen(request *chat.AuthRequest, stream chat.Chat_ListenSe
 			UserUUID: uuid.NewString(),
 			UserName: "Server",
 			Time:     0,
-			Msg:      "Room closed. You will be redirected. Bye! ",
+			Msg:      "Room closed by author or by server. You will be redirected. Bye! ",
 		})
 	case <-closeConnCh:
 	case <-stream.Context().Done():

@@ -193,7 +193,6 @@ func (s *StreamServer) handleWS(ws *websocket.Conn) {
 func (s *StreamServer) readLoop(ws *websocket.Conn, state *RoomState, user *dto.User) {
 	// buffer for reads, 128kb per connection
 	buf := make([]byte, 1024*128)
-	var opponent *UserState
 
 	// can we fetch userState
 	userState := state.GetUserState(user)
@@ -208,11 +207,6 @@ func (s *StreamServer) readLoop(ws *websocket.Conn, state *RoomState, user *dto.
 		userState.inputStream.Close()
 	}
 	userState.inputStream = ws
-	if userState == state.author {
-		opponent = state.guest
-	} else {
-		opponent = state.author
-	}
 	state.mu.Unlock()
 
 	go func() {
@@ -222,35 +216,41 @@ func (s *StreamServer) readLoop(ws *websocket.Conn, state *RoomState, user *dto.
 
 	for {
 		length, err := ws.Read(buf)
+		if err != nil && err == io.EOF {
+			break
+		}
 		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			log.Println("StreamServiceServer:: [ws] read error")
+			log.Println("StreamServiceServer:: [ws] read error", err)
 			continue
 		}
 		// we handle ws connections alive on front-end
 		if bytes.Equal(PingPacket, buf[:3]) {
-			_, err := ws.Write(PongPacket)
-			if err != nil {
-				log.Println("StreamServiceServer:: [ws] write error")
-				ws.Close()
-				break
-			}
+			respondPingPing(ws)
 			continue
 		}
 		// AV Data came need resend to grpc web stream
 		if bytes.Equal(DataPacket, buf[:3]) {
-			if opponent.outputStream.stream != nil {
-				// we ignore errors, it's safe
-				_ = opponent.outputStream.stream.Send(&stream.AVFrameData{
-					UserUUID:  user.UUID.String(),
-					FrameData: buf[4:length],
-				})
-			}
+			handleDataPacket(buf, length, state, userState)
 			continue
 		}
 		log.Println("StreamServiceServer:: [ws] unhandled message: ", string(buf[:length]))
+	}
+}
+
+func handleDataPacket(buf []byte, length int, state *RoomState, userState *UserState) {
+	avStream := state.GetOpponentDataStream(userState)
+	// we ignore errors, it's safe
+	_ = avStream.Send(&stream.AVFrameData{
+		UserUUID:  userState.user.UUID.String(),
+		FrameData: buf[4:length],
+	})
+}
+
+func respondPingPing(ws *websocket.Conn) {
+	_, err := ws.Write(PongPacket)
+	if err != nil {
+		log.Println("StreamServiceServer:: [ws] write error")
+		ws.Close()
 	}
 }
 
