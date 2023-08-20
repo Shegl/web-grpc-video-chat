@@ -1,89 +1,45 @@
 package inroom
 
 import (
-	"errors"
 	"github.com/google/uuid"
 	"sync"
-	"time"
 	"web-grpc-video-chat/src/dto"
 )
 
-type RoomStateProvider struct {
-	mu         sync.RWMutex
-	roomStates map[uuid.UUID]*RoomState
+type RoomProvider struct {
+	mu    sync.RWMutex
+	rooms map[uuid.UUID]*RoomManager
 }
 
-func (r *RoomStateProvider) MakeRoomState(room *dto.Room) *RoomState {
+func (r *RoomProvider) MakeRoom(room *dto.Room) {
 	r.mu.Lock()
-	roomState := NewRoomState(room)
-	r.roomStates[room.UUID] = roomState
+	managedRoom := makeManager(room)
+	r.rooms[room.UUID] = managedRoom
 	r.mu.Unlock()
-	return roomState
 }
 
-func (r *RoomStateProvider) GetRoomStateByUUID(roomUUID uuid.UUID) *RoomState {
+func (r *RoomProvider) GetRoomManager(room *dto.Room) *RoomManager {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if roomState, exists := r.roomStates[roomUUID]; exists {
-		return roomState
+	if manager, exists := r.rooms[room.UUID]; exists {
+		return manager
 	}
 	return nil
 }
 
-func (r *RoomStateProvider) GetRoomState(room *dto.Room) *RoomState {
-	return r.GetRoomStateByUUID(room.UUID)
-}
-
-func (r *RoomStateProvider) GetByUserAndRoom(
-	userStringUUID string,
-	roomStringUUID string,
-) (*RoomState, *dto.User, error) {
-	roomUUID, errChat := uuid.Parse(roomStringUUID)
-	userUUID, errUser := uuid.Parse(userStringUUID)
-	if errChat != nil || errUser != nil {
-		return nil, nil, errors.New("Wrong UUID. ")
-	}
-	roomState := r.GetRoomStateByUUID(roomUUID)
-	if roomState == nil {
-		return nil, nil, errors.New("Room not found. ")
-	}
-	roomState.mu.RLock()
-	defer roomState.mu.RUnlock()
-	if roomState.author.user.UUID == userUUID {
-		return roomState, roomState.author.user, nil
-	}
-	if roomState.guest != nil && roomState.guest.user.UUID == userUUID {
-		return roomState, roomState.guest.user, nil
-	}
-	return nil, nil, errors.New("Wrong combination of user and room. ")
-}
-
-func (r *RoomStateProvider) Forget(roomState *RoomState) {
+func (r *RoomProvider) Close(room *dto.Room) {
+	manager := r.GetRoomManager(room)
 	r.mu.Lock()
-	roomState.mu.Lock()
-	defer func() {
-		roomState.mu.Unlock()
-		r.mu.Unlock()
-	}()
-	if !roomState.isAlive {
-		return
+	defer r.mu.Unlock()
+	if manager != nil {
+		manager.shutdown()
+		delete(r.rooms, room.UUID)
 	}
-	roomState.isAlive = false
-	roomState.Close()
-	delete(r.roomStates, roomState.room.UUID)
-	if roomState.guest != nil {
-		roomState.closeChannels(roomState.guest.user)
-	}
-	go func(state *RoomState) {
-		time.Sleep(time.Second * 5)
-		state.closeChannels(state.author.user)
-		close(roomState.chat.msgChan)
-	}(roomState)
 }
 
-func NewRoomStateProvider() *RoomStateProvider {
-	return &RoomStateProvider{
-		mu:         sync.RWMutex{},
-		roomStates: make(map[uuid.UUID]*RoomState),
+func NewRoomProvider() *RoomProvider {
+	return &RoomProvider{
+		mu:    sync.RWMutex{},
+		rooms: make(map[uuid.UUID]*RoomManager),
 	}
 }

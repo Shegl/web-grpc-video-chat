@@ -5,13 +5,12 @@ import (
 	"github.com/google/uuid"
 	"math/rand"
 	"regexp"
-	"sync"
 	"web-grpc-video-chat/src/dto"
 )
 
 type AuthService struct {
 	authUsers map[uuid.UUID]*dto.User
-	mu        sync.RWMutex
+	repo      *dto.Repository
 }
 
 var randomNames = [10]string{"Ron", "John", "Don", "Hubert", "Mike", "Alex", "Anton", "Mathias", "Dora", "Jane"}
@@ -23,46 +22,18 @@ func (a *AuthService) Authenticate(userName string) (*dto.User, error) {
 		userName = randomNames[rand.Intn(len(randomNames))]
 	}
 
-	userUUID, err := uuid.NewRandom()
+	user, err := a.repo.CreateUser(userName)
 	if err != nil {
-		return nil, err
-	}
-	a.mu.RLock()
-	if _, exists := a.authUsers[userUUID]; exists {
-		a.mu.RUnlock()
 		return a.Authenticate(userName)
 	}
-	a.mu.RUnlock()
-
-	a.mu.Lock()
-	user := &dto.User{
-		Name: userName,
-		UUID: userUUID,
-	}
-	a.authUsers[userUUID] = user
-	a.mu.Unlock()
 
 	return user, nil
 }
 
 func (a *AuthService) GetUser(userUUID uuid.UUID) (*dto.User, error) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	if user, exists := a.authUsers[userUUID]; !exists {
-		return user, errors.New("there is no user with provided UUID")
-	} else {
-		return user, nil
-	}
-}
-
-func (a *AuthService) GetUserByString(stringUUID string) (*dto.User, error) {
-	userUUID, err := uuid.Parse(stringUUID)
-	if err != nil {
-		return nil, err
-	}
-	user, err := a.GetUser(userUUID)
-	if err != nil {
-		return nil, err
+	user := a.repo.FindUserByUuid(userUUID)
+	if user == nil {
+		return nil, errors.New("There is no such user. ")
 	}
 	return user, nil
 }
@@ -70,11 +41,9 @@ func (a *AuthService) GetUserByString(stringUUID string) (*dto.User, error) {
 // Logout actually we want our users to be logged in forever
 // but, it's nice to have option to logout if you have logged in, right ?
 func (a *AuthService) Logout(userUUID uuid.UUID) {
-	a.mu.Lock()
-	delete(a.authUsers, userUUID)
-	a.mu.Unlock()
+	a.repo.ForgetUserByUuid(userUUID)
 }
 
-func NewAuthService() *AuthService {
-	return &AuthService{authUsers: make(map[uuid.UUID]*dto.User)}
+func NewAuthService(repo *dto.Repository) *AuthService {
+	return &AuthService{repo: repo}
 }

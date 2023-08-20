@@ -2,7 +2,7 @@ package inroom
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"log"
@@ -14,32 +14,21 @@ import (
 )
 
 type ChatServer struct {
-	stateProvider *RoomStateProvider
-
-	addr  string
-	wg    *sync.WaitGroup
-	mu    sync.RWMutex
-	chats map[uuid.UUID]*ChatState
+	roomProvider *RoomProvider
+	repo         *dto.Repository
+	addr         string
+	wg           *sync.WaitGroup
+	mu           sync.RWMutex
 	chat.UnimplementedChatServer
 }
 
-type ChatState struct {
-	room     *dto.Room
-	messages []*chat.ChatMessage
-	msgChan  chan *chat.ChatMessage
-	mu       sync.RWMutex
-}
-
-func (s *ChatServer) Init(addr string, wg *sync.WaitGroup) error {
+func (s *ChatServer) Init(addr string, wg *sync.WaitGroup) {
 	s.addr = addr
 	s.wg = wg
-
-	return nil
 }
 
 func (s *ChatServer) Run(ctx context.Context) error {
 	s.wg.Add(1)
-
 	log.Println("ChatService:: starting")
 
 	// we create grpc without tls, envoy will terminate it
@@ -67,57 +56,72 @@ func (s *ChatServer) Run(ctx context.Context) error {
 
 func (s *ChatServer) GetHistory(ctx context.Context, request *chat.AuthRequest) (*chat.HistoryResponse, error) {
 	// we must check User and Room permissions
-	state, _, err := s.stateProvider.GetByUserAndRoom(request.GetUUID(), request.GetChatUUID())
+	room, err := s.repo.FindRoomByString(request.GetChatUUID())
+	if room == nil || err != nil {
+		return nil, errors.New("No such room or uuid is not valid. ")
+	}
+	user, err := s.repo.FindUserByString(request.GetUUID())
 	if err != nil {
-		fmt.Println("Error on fetching user and room, room might be already closed or never exists.")
 		return nil, err
 	}
-	state.chat.mu.RLock()
-	defer state.chat.mu.RUnlock()
+	manager := s.roomProvider.GetRoomManager(room)
+	if manager == nil {
+		panic(errors.New("Something went wrong, not as designed. "))
+	}
+	if !manager.inRoom(user) {
+		return nil, errors.New("User not in room. ")
+	}
 	return &chat.HistoryResponse{
-		Messages: state.chat.messages,
+		Messages: manager.getChatHistory(),
 	}, nil
 }
 
 func (s *ChatServer) SendMessage(ctx context.Context, request *chat.SendMessageRequest) (*chat.Empty, error) {
 	// we must check User and Room correctness
-	state, user, err := s.stateProvider.GetByUserAndRoom(
-		request.GetAuthData().GetUUID(),
-		request.GetAuthData().GetChatUUID(),
-	)
-	if err != nil {
-		return nil, err
-	}
 	if request.GetMsg() == "" {
 		return &chat.Empty{}, nil
 	}
-	// all fine, lets proceed
-	chatMessage := &chat.ChatMessage{
-		UUID:     uuid.New().String(),
-		UserUUID: user.UUID.String(),
-		UserName: user.Name,
-		Time:     time.Now().Unix(),
-		Msg:      request.Msg,
+	room, err := s.repo.FindRoomByString(request.GetAuthData().GetChatUUID())
+	if err != nil {
+		return nil, err
 	}
-
-	state.chat.msgChan <- chatMessage
-
+	user, err := s.repo.FindUserByString(request.GetAuthData().GetUUID())
+	if err != nil {
+		return nil, err
+	}
+	manager := s.roomProvider.GetRoomManager(room)
+	if manager != nil && manager.inRoom(user) {
+		manager.chatBroadcast(&chat.ChatMessage{
+			UUID:     uuid.New().String(),
+			UserUUID: user.UUID.String(),
+			UserName: user.Name,
+			Time:     time.Now().Unix(),
+			Msg:      request.Msg,
+		})
+	}
 	return &chat.Empty{}, nil
 }
 
 func (s *ChatServer) Listen(request *chat.AuthRequest, stream chat.Chat_ListenServer) error {
-	state, user, err := s.stateProvider.GetByUserAndRoom(request.GetUUID(), request.GetChatUUID())
+	room, err := s.repo.FindRoomByString(request.GetChatUUID())
 	if err != nil {
 		return err
 	}
-	closeConnCh, err := state.RoomChatConnect(user, stream)
+	user, err := s.repo.FindUserByString(request.GetChatUUID())
 	if err != nil {
 		return err
 	}
-
+	manager := s.roomProvider.GetRoomManager(room)
+	if manager == nil || !manager.inRoom(user) {
+		return errors.New("User not in room. ")
+	}
+	closeConnCh, err := manager.roomChatConnect(user, stream)
+	if err != nil {
+		return err
+	}
 	select {
-	case <-state.roomCtx.Done():
-		stream.Send(&chat.ChatMessage{
+	case <-manager.roomCtx.Done():
+		manager.chatBroadcast(&chat.ChatMessage{
 			UUID:     uuid.NewString(),
 			UserUUID: uuid.NewString(),
 			UserName: "Server",
@@ -130,40 +134,9 @@ func (s *ChatServer) Listen(request *chat.AuthRequest, stream chat.Chat_ListenSe
 	return nil
 }
 
-func NewChatServer(provider *RoomStateProvider) *ChatServer {
+func NewChatServer(provider *RoomProvider, repo *dto.Repository) *ChatServer {
 	return &ChatServer{
-		stateProvider: provider,
+		roomProvider: provider,
+		repo:         repo,
 	}
-}
-
-func AddChatState(roomState *RoomState) {
-	chatState := &ChatState{
-		room: roomState.room,
-		messages: []*chat.ChatMessage{{
-			UUID:     uuid.NewString(),
-			UserUUID: uuid.NewString(),
-			UserName: "Server",
-			Time:     0,
-			Msg:      "Welcome to chat",
-		}},
-		msgChan: make(chan *chat.ChatMessage, 4),
-	}
-	go func(state *ChatState) {
-		for {
-			message, ok := <-state.msgChan
-			if !ok {
-				return
-			}
-			state.mu.Lock()
-			state.messages = append(state.messages, message)
-			state.mu.Unlock()
-			if roomState.author.chatStream.stream != nil {
-				roomState.author.chatStream.stream.Send(message)
-			}
-			if roomState.guest != nil && roomState.guest.chatStream.stream != nil {
-				roomState.guest.chatStream.stream.Send(message)
-			}
-		}
-	}(chatState)
-	roomState.chat = chatState
 }

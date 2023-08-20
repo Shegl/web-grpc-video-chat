@@ -9,122 +9,90 @@ import (
 )
 
 type RoomService struct {
-	stateProvider *inroom.RoomStateProvider
-
-	rooms    map[uuid.UUID]*dto.Room
-	asAuthor map[uuid.UUID]*dto.Room
-	asGuest  map[uuid.UUID]*dto.Room
-
-	mu sync.RWMutex
+	roomProvider *inroom.RoomProvider
+	repo         *dto.Repository
+	txLock       sync.RWMutex
 }
 
 func (r *RoomService) Create(user *dto.User) (*dto.Room, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if room, exists := r.asAuthor[user.UUID]; exists {
-		// room already exists, let user get back to his room,
-		// if he needs new room, he will get that he needs leave his room first
-		return room, nil
-	}
-	if _, existsAsGuest := r.asGuest[user.UUID]; existsAsGuest {
-		// let's check user, what if he already as guest in someone else room
-		r.leave(user)
+	// "Create" must be atomic transaction, using mutex
+	r.txLock.Lock()
+	defer r.txLock.Unlock()
+	if r.repo.IsGuest(user) {
+		r.leaveAsGuest(user)
 	}
 	return r.create(user), nil
 }
 
 func (r *RoomService) create(user *dto.User) *dto.Room {
-	room := &dto.Room{
-		State:  1,
-		UUID:   uuid.New(),
-		Author: user,
-		Guest:  nil,
-	}
-	r.rooms[room.UUID] = room
-	r.asAuthor[user.UUID] = room
-
-	r.stateProvider.MakeRoomState(room)
-
+	room := r.repo.CreateRoomForUser(user)
+	r.roomProvider.MakeRoom(room)
 	return room
 }
 
-func (r *RoomService) Join(roomUUID uuid.UUID, user *dto.User) (*dto.Room, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if room, exists := r.rooms[roomUUID]; exists {
-		// room exists, good. Is it occupied?
-		if room.Guest == nil && room.Author != user {
-			return r.join(roomUUID, user), nil
-		}
-		if room.Guest == user {
-			// same user, its counter as rejoin
-			return room, nil
-		}
-		// error handling
-		var err error
-		if room.Author == user {
-			err = errors.New("User cant join as guest to his room. ")
-		} else {
-			err = errors.New("Room occupied. ")
-		}
-		return nil, err
+func (r *RoomService) Join(roomUuid uuid.UUID, user *dto.User) (*dto.Room, error) {
+	r.txLock.Lock()
+	defer r.txLock.Unlock()
+	room := r.repo.FindRoomByUuid(roomUuid)
+	if room == nil {
+		return nil, errors.New("Room not exists. ")
 	}
-	return nil, errors.New("Room not exists. ")
+	if room.Guest == user {
+		// already joined
+		return room, nil
+	}
+	if room.Author == user {
+		return nil, errors.New("User cant join as guest to his room. ")
+	}
+	if room.Guest != nil {
+		return nil, errors.New("Room occupied. ")
+	}
+	return r.join(room, user), nil
 }
 
-func (r *RoomService) join(roomUUID uuid.UUID, user *dto.User) *dto.Room {
-	if room, exists := r.rooms[roomUUID]; exists {
-		roomState := r.stateProvider.GetRoomState(room)
-		if roomState == nil {
-			// room in state of deletion
-			return nil
-		}
-		err := roomState.JoinRoom(user)
-		if err != nil {
-			panic(err)
-		}
-		room.Guest = user
-		r.asGuest[user.UUID] = room
-		return room
+func (r *RoomService) join(room *dto.Room, user *dto.User) *dto.Room {
+	manager := r.roomProvider.GetRoomManager(room)
+	if manager == nil || !manager.IsAlive() {
+		// room in state of deletion
+		return nil
 	}
-	return nil
+	err := manager.JoinRoom(user)
+	if err != nil {
+		panic(err)
+	}
+	r.repo.CommitUserJoin(room, user)
+	return room
 }
 
 func (r *RoomService) State(user *dto.User) *dto.Room {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if room, exists := r.asAuthor[user.UUID]; exists {
-		return room
-	}
-	if room, exists := r.asGuest[user.UUID]; exists {
-		return room
-	}
-	return nil
+	return r.repo.FindRoomByUser(user)
 }
 
 func (r *RoomService) Leave(user *dto.User) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if room, exists := r.asAuthor[user.UUID]; exists {
-		roomState := r.stateProvider.GetRoomState(room)
-		if roomState != nil {
-			r.stateProvider.Forget(roomState)
-		}
-		delete(r.rooms, room.UUID)
-		delete(r.asAuthor, user.UUID)
+	r.txLock.Lock()
+	defer r.txLock.Unlock()
+
+	room := r.repo.FindRoomByUser(user)
+	if room.Author == user {
+		r.roomProvider.Close(room)
+		r.repo.CommitRoomShutdown(room)
 		return
 	}
-	r.leave(user)
+	r.leaveAsGuest(user)
 }
 
-func (r *RoomService) leave(user *dto.User) {
-	if room, exists := r.asGuest[user.UUID]; exists {
-		roomState := r.stateProvider.GetRoomState(room)
-		if roomState != nil {
-			roomState.LeaveRoom(user)
-		}
-		room.Guest = nil
-		delete(r.asGuest, user.UUID)
+func (r *RoomService) leaveAsGuest(user *dto.User) {
+	room := r.repo.FindRoomByUser(user)
+	if room == nil {
+		return
+	}
+	err := r.repo.CommitUserLeave(room, user)
+	if err != nil {
+		panic(err)
+	}
+	manager := r.roomProvider.GetRoomManager(room)
+	if manager != nil {
+		manager.GuestLeave(user)
 	}
 }
 
@@ -140,12 +108,10 @@ func (r *RoomService) GetRoom(user *dto.User, stringUUID string) (*dto.Room, err
 	return nil, errors.New("Wrong room. ")
 }
 
-func NewRoomService(provider *inroom.RoomStateProvider) *RoomService {
+func NewRoomService(provider *inroom.RoomProvider, repo *dto.Repository) *RoomService {
 	return &RoomService{
-		stateProvider: provider,
-
-		rooms:    make(map[uuid.UUID]*dto.Room),
-		asAuthor: make(map[uuid.UUID]*dto.Room),
-		asGuest:  make(map[uuid.UUID]*dto.Room),
+		roomProvider: provider,
+		repo:         repo,
+		txLock:       sync.RWMutex{},
 	}
 }
