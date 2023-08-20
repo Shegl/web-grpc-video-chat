@@ -11,7 +11,7 @@ type RoomProvider struct {
 	rooms map[uuid.UUID]*RoomManager
 }
 
-func (r *RoomProvider) MakeRoom(room *dto.Room) {
+func (r *RoomProvider) MakeRoomManager(room *dto.Room) {
 	r.mu.Lock()
 	managedRoom := makeManager(room)
 	r.rooms[room.UUID] = managedRoom

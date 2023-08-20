@@ -21,18 +21,18 @@ type RoomManager struct {
 	close   func()
 }
 
-func (m *RoomManager) JoinRoom(guest *dto.User) error {
+func (m *RoomManager) JoinRoom(guest *dto.User) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.guest.takeSlot(guest)
+	m.guest.takeSlot(guest)
+	m.mu.Unlock()
 }
 
 func (m *RoomManager) GuestLeave(guest *dto.User) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.guest.isUser(guest) {
 		m.guest.freeUpSlot()
 	}
+	m.mu.Unlock()
 }
 
 func (m *RoomManager) IsAlive() bool {
@@ -54,31 +54,6 @@ func (m *RoomManager) updateUserState(user *dto.User, userStreamState *stream.Us
 	}
 }
 
-func (m *RoomManager) roomChatConnect(
-	user *dto.User,
-	server chat.Chat_ListenServer,
-) (<-chan struct{}, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	slot := m.getUserSlot(user)
-	if slot != nil {
-		return slot.connectChatStream(server), nil
-	}
-	return nil, errors.New("Cant update state, user not in room. ")
-}
-
-func (m *RoomManager) getChatHistory() []*chat.ChatMessage {
-	return m.chat.getMessages()
-}
-
-func (m *RoomManager) chatBroadcast(message *chat.ChatMessage) {
-	m.chat.appendMessage(message)
-	m.mu.RLock()
-	m.author.sendChatMessage(message)
-	m.guest.sendChatMessage(message)
-	m.mu.RUnlock()
-}
-
 func (m *RoomManager) avStreamConnect(
 	user *dto.User,
 	server stream.Stream_AVStreamServer,
@@ -89,7 +64,8 @@ func (m *RoomManager) avStreamConnect(
 	if slot != nil {
 		return slot.connectAVStream(server), nil
 	}
-	return nil, errors.New("Cant update state, user not in room. ")
+	// very rare but possible error must be handled
+	return nil, errors.New("Cant update state, user already left room nanoseconds ago. ")
 }
 
 func (m *RoomManager) stateStreamConnect(
@@ -102,7 +78,34 @@ func (m *RoomManager) stateStreamConnect(
 	if slot != nil {
 		return slot.connectStateStream(server), nil
 	}
-	return nil, errors.New("Cant update state, user not in room. ")
+	// very rare but possible error must be handled
+	return nil, errors.New("Cant update state, user already left room nanoseconds ago. ")
+}
+
+func (m *RoomManager) roomChatConnect(
+	user *dto.User,
+	server chat.Chat_ListenServer,
+) (<-chan struct{}, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	slot := m.getUserSlot(user)
+	if slot != nil {
+		return slot.connectChatStream(server), nil
+	}
+	// very rare but possible error must be handled
+	return nil, errors.New("Cant update state, user already left room nanoseconds ago. ")
+}
+
+func (m *RoomManager) getChatHistory() []*chat.ChatMessage {
+	return m.chat.getMessages()
+}
+
+func (m *RoomManager) chatBroadcast(message *chat.ChatMessage) {
+	m.chat.appendMessage(message)
+	m.mu.RLock()
+	m.author.sendChatMessage(message)
+	m.guest.sendChatMessage(message)
+	m.mu.RUnlock()
 }
 
 func (m *RoomManager) getUserSlot(user *dto.User) *userSlot {

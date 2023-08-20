@@ -26,7 +26,7 @@ func (r *RoomService) Create(user *dto.User) (*dto.Room, error) {
 
 func (r *RoomService) create(user *dto.User) *dto.Room {
 	room := r.repo.CreateRoomForUser(user)
-	r.roomProvider.MakeRoom(room)
+	r.roomProvider.MakeRoomManager(room)
 	return room
 }
 
@@ -57,11 +57,8 @@ func (r *RoomService) join(room *dto.Room, user *dto.User) *dto.Room {
 		// room in state of deletion
 		return nil
 	}
-	err := manager.JoinRoom(user)
-	if err != nil {
-		panic(err)
-	}
 	r.repo.CommitUserJoin(room, user)
+	manager.JoinRoom(user)
 	return room
 }
 
@@ -75,8 +72,8 @@ func (r *RoomService) Leave(user *dto.User) {
 
 	room := r.repo.FindRoomByUser(user)
 	if room.Author == user {
-		r.roomProvider.Close(room)
 		r.repo.CommitRoomShutdown(room)
+		r.roomProvider.Close(room)
 		return
 	}
 	r.leaveAsGuest(user)
@@ -84,13 +81,7 @@ func (r *RoomService) Leave(user *dto.User) {
 
 func (r *RoomService) leaveAsGuest(user *dto.User) {
 	room := r.repo.FindRoomByUser(user)
-	if room == nil {
-		return
-	}
-	err := r.repo.CommitUserLeave(room, user)
-	if err != nil {
-		panic(err)
-	}
+	r.repo.CommitGuestLeave(room)
 	manager := r.roomProvider.GetRoomManager(room)
 	if manager != nil {
 		manager.GuestLeave(user)

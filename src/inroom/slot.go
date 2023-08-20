@@ -45,16 +45,15 @@ func (us *userSlot) isUser(user *dto.User) bool {
 	return us.user != nil && us.user == user
 }
 
-func (us *userSlot) takeSlot(user *dto.User) error {
+func (us *userSlot) takeSlot(user *dto.User) {
 	if us.status != slotFree {
-		return errors.New("Slot is occupied. ")
+		panic(errors.New("Slot is occupied. Abnormal behavior consistency/atomicity violation. "))
 	}
 	us.user = user
 	us.status = slotOccupied
 	us.outputAVStream.closeCh = make(chan struct{})
 	us.stateStream.closeCh = make(chan struct{})
 	us.chatStream.closeCh = make(chan struct{})
-	return nil
 }
 
 func (us *userSlot) freeUpSlot() *dto.User {

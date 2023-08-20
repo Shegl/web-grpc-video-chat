@@ -95,17 +95,11 @@ func (r *Repository) CommitUserJoin(room *Room, user *User) {
 	r.ls.asGuest[user.UUID] = room
 }
 
-func (r *Repository) CommitUserLeave(room *Room, user *User) error {
+func (r *Repository) CommitGuestLeave(room *Room) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
-	if room.Guest == nil || room.Guest != user {
-		return errors.New("User is not guest in provided room. ")
-	}
-
+	delete(r.ls.asGuest, room.Guest.UUID)
 	room.Guest = nil
-	delete(r.ls.asGuest, user.UUID)
-	return nil
 }
 
 func (r *Repository) CommitRoomShutdown(room *Room) {
