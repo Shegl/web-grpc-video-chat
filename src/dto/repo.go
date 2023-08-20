@@ -95,7 +95,7 @@ func (r *Repository) CommitUserJoin(room *Room, user *User) {
 	r.ls.asGuest[user.UUID] = room
 }
 
-func (r *Repository) CommitGuestLeave(room *Room) {
+func (r *Repository) CommitUserLeave(room *Room) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.ls.asGuest, room.Guest.UUID)

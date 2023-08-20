@@ -81,7 +81,7 @@ func (r *RoomService) Leave(user *dto.User) {
 
 func (r *RoomService) leaveAsGuest(user *dto.User) {
 	room := r.repo.FindRoomByUser(user)
-	r.repo.CommitGuestLeave(room)
+	r.repo.CommitUserLeave(room)
 	manager := r.roomProvider.GetRoomManager(room)
 	if manager != nil {
 		manager.GuestLeave(user)
