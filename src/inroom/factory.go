@@ -11,26 +11,24 @@ import (
 
 func makeManager(room *dto.Room) *RoomManager {
 	roomCtx, cancelFunc := context.WithCancel(context.Background())
+	authorSlot, guestSlot := makeSlots(room.Author)
 	manager := &RoomManager{
 		room:    room,
 		isAlive: true,
 		mu:      sync.RWMutex{},
 		roomCtx: roomCtx,
 		close:   cancelFunc,
-		chat:    nil,
+		author:  authorSlot,
+		guest:   guestSlot,
+		chat:    makeChatState(),
 	}
-	authorSlot, guestSlot := makeSlots(room.Author, manager)
-	manager.author = authorSlot
-	manager.guest = guestSlot
-	manager.chat = makeChatState()
 	return manager
 }
 
-func makeSlots(author *dto.User, manager *RoomManager) (*userSlot, *userSlot) {
+func makeSlots(author *dto.User) (*userSlot, *userSlot) {
 	return &userSlot{
-			user:    author,
-			status:  slotAuthor,
-			manager: manager,
+			user:   author,
+			status: slotAuthor,
 			state: &stream.User{
 				IsCamEnabled: true,
 				IsMuted:      true,
@@ -45,7 +43,6 @@ func makeSlots(author *dto.User, manager *RoomManager) (*userSlot, *userSlot) {
 		&userSlot{
 			user:           nil,
 			status:         slotFree,
-			manager:        manager,
 			state:          nil,
 			inputAVConn:    nil,
 			outputAVStream: &avStream{stream: nil, closeCh: nil},

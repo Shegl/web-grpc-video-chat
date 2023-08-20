@@ -34,7 +34,6 @@ type avStream struct {
 type userSlot struct {
 	status         userSlotStatus
 	user           *dto.User
-	manager        *RoomManager
 	state          *stream.User
 	inputAVConn    *websocket.Conn
 	outputAVStream *avStream
