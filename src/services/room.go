@@ -33,6 +33,7 @@ func (r *RoomService) create(user *dto.User) *dto.Room {
 func (r *RoomService) Join(roomUuid uuid.UUID, user *dto.User) (*dto.Room, error) {
 	r.txLock.Lock()
 	defer r.txLock.Unlock()
+
 	room := r.repo.FindRoomByUuid(roomUuid)
 	if room == nil {
 		return nil, errors.New("Room not exists. ")
