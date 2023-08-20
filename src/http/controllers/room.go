@@ -44,12 +44,12 @@ func (c *RoomController) Join(ctx *gin.Context) {
 		ctx.JSON(401, err.Error())
 		return
 	}
-	roomUUID, err := uuid.Parse(request.RoomUUID)
+	roomUuid, err := uuid.Parse(request.RoomUUID)
 	if err != nil {
 		ctx.JSON(422, "Cannot parse provided UUID")
 		return
 	}
-	room, err := c.roomService.Join(roomUUID, user)
+	room, err := c.roomService.Join(roomUuid, user)
 	if err != nil {
 		ctx.JSON(422, err.Error())
 		return

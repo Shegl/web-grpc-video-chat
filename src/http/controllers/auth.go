@@ -19,9 +19,9 @@ func (c *AuthController) Check(ctx *gin.Context) {
 		return
 	}
 	var user *dto.User
-	userUUID, err := uuid.Parse(request.UUID)
+	userUuid, err := uuid.Parse(request.UUID)
 	if err == nil {
-		user, err = c.authService.GetUser(userUUID)
+		user, err = c.authService.GetUser(userUuid)
 		if err != nil {
 			ctx.JSON(401, nil)
 			return
@@ -52,9 +52,9 @@ func (c *AuthController) Logout(ctx *gin.Context) {
 		return
 	}
 
-	userUUID, err := uuid.Parse(request.UUID)
+	userUuid, err := uuid.Parse(request.UUID)
 	if err == nil {
-		c.authService.Logout(userUUID)
+		c.authService.Logout(userUuid)
 	}
 	ctx.JSON(200, "OK")
 }

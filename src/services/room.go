@@ -96,13 +96,13 @@ func (r *RoomService) leaveAsGuest(user *dto.User) {
 	}
 }
 
-func (r *RoomService) GetRoom(user *dto.User, stringUUID string) (*dto.Room, error) {
-	roomUUID, err := uuid.Parse(stringUUID)
+func (r *RoomService) GetRoom(user *dto.User, stringUuid string) (*dto.Room, error) {
+	roomUuid, err := uuid.Parse(stringUuid)
 	if err != nil {
 		return nil, err
 	}
 	room := r.State(user)
-	if room != nil && room.UUID == roomUUID {
+	if room != nil && room.UUID == roomUuid {
 		return room, nil
 	}
 	return nil, errors.New("Wrong room. ")

@@ -30,8 +30,8 @@ func (a *AuthService) Authenticate(userName string) (*dto.User, error) {
 	return user, nil
 }
 
-func (a *AuthService) GetUser(userUUID uuid.UUID) (*dto.User, error) {
-	user := a.repo.FindUserByUuid(userUUID)
+func (a *AuthService) GetUser(userUuid uuid.UUID) (*dto.User, error) {
+	user := a.repo.FindUserByUuid(userUuid)
 	if user == nil {
 		return nil, errors.New("There is no such user. ")
 	}
