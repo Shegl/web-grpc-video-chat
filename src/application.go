@@ -8,13 +8,13 @@ import (
 	"sync"
 	"syscall"
 	"web-grpc-video-chat/src/http"
-	"web-grpc-video-chat/src/inroom"
+	"web-grpc-video-chat/src/pb"
 )
 
 type Application struct {
 	webServer    *http.WebServer
-	chatServer   *inroom.ChatServer
-	streamServer *inroom.StreamServer
+	chatServer   *pb.ChatServer
+	streamServer *pb.StreamServer
 	wg           sync.WaitGroup
 	sigs         chan os.Signal
 	shutdownChan chan struct{}
@@ -78,8 +78,8 @@ func (a *Application) processSignals(cancelFunc context.CancelFunc) {
 
 func NewApplication(
 	webServer *http.WebServer,
-	chatServer *inroom.ChatServer,
-	streamServer *inroom.StreamServer,
+	chatServer *pb.ChatServer,
+	streamServer *pb.StreamServer,
 ) *Application {
 	return &Application{
 		webServer:    webServer,

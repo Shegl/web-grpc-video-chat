@@ -1,4 +1,4 @@
-package inroom
+package pb
 
 import (
 	"context"
@@ -9,13 +9,23 @@ import (
 	"net"
 	"sync"
 	"time"
-	"web-grpc-video-chat/src/dto"
-	"web-grpc-video-chat/src/inroom/chat"
+	"web-grpc-video-chat/src/internal/core/domain"
+	"web-grpc-video-chat/src/internal/core/repo"
+	"web-grpc-video-chat/src/internal/core/services"
+	"web-grpc-video-chat/src/pb/chat"
 )
 
+type ChatListenServerAdapter struct {
+	server chat.Chat_ListenServer
+}
+
+func (s *ChatListenServerAdapter) Send(msg domain.ChatMessage) error {
+	return s.server.Send(buildPbChatMessage(msg))
+}
+
 type ChatServer struct {
-	roomProvider *RoomProvider
-	repo         *dto.Repository
+	roomProvider *services.RoomManagerProvider
+	repo         *repo.Repository
 	addr         string
 	wg           *sync.WaitGroup
 	mu           sync.RWMutex
@@ -55,7 +65,7 @@ func (s *ChatServer) Run(ctx context.Context) error {
 }
 
 func (s *ChatServer) GetHistory(ctx context.Context, request *chat.AuthRequest) (*chat.HistoryResponse, error) {
-	// we must check User and Room permissions
+	// we must validate User and Room
 	room, err := s.repo.FindRoomByString(request.GetChatUUID())
 	if room == nil || err != nil {
 		return nil, errors.New("No such room or uuid is not valid. ")
@@ -68,38 +78,43 @@ func (s *ChatServer) GetHistory(ctx context.Context, request *chat.AuthRequest) 
 	if manager == nil {
 		panic(errors.New("Something went wrong, not as designed. "))
 	}
-	if !manager.inRoom(user) {
-		return nil, errors.New("User not in room. ")
+	if manager.InRoom(user) {
+		chatMessages := manager.GetChatHistory()
+		pbMessages := make([]*chat.ChatMessage, len(chatMessages), len(chatMessages))
+		for k, msg := range chatMessages {
+			pbMessages[k] = buildPbChatMessage(msg)
+		}
+		return &chat.HistoryResponse{
+			Messages: pbMessages,
+		}, nil
 	}
-	return &chat.HistoryResponse{
-		Messages: manager.getChatHistory(),
-	}, nil
+	return nil, errors.New("User not in room. ")
 }
 
-func (s *ChatServer) SendMessage(ctx context.Context, request *chat.SendMessageRequest) (*chat.Empty, error) {
-	// we must check User and Room correctness
+func (s *ChatServer) SendMessage(ctx context.Context, request *chat.SendMessageRequest) (v *chat.Empty, err error) {
+	// we must validate User and Room
 	if request.GetMsg() == "" {
-		return &chat.Empty{}, nil
+		return
 	}
 	room, err := s.repo.FindRoomByString(request.GetAuthData().GetChatUUID())
 	if err != nil {
-		return nil, err
+		return
 	}
 	user, err := s.repo.FindUserByString(request.GetAuthData().GetUUID())
 	if err != nil {
-		return nil, err
+		return
 	}
 	manager := s.roomProvider.GetRoomManager(room)
-	if manager != nil && manager.inRoom(user) {
-		manager.chatBroadcast(&chat.ChatMessage{
-			UUID:     uuid.New().String(),
-			UserUUID: user.UUID.String(),
-			UserName: user.Name,
+	if manager != nil && manager.InRoom(user) {
+		manager.ChatBroadcast(domain.ChatMessage{
 			Time:     time.Now().Unix(),
+			UUID:     uuid.New(),
+			UserUUID: user.UUID,
+			UserName: user.Name,
 			Msg:      request.Msg,
 		})
 	}
-	return &chat.Empty{}, nil
+	return
 }
 
 func (s *ChatServer) Listen(request *chat.AuthRequest, stream chat.Chat_ListenServer) error {
@@ -112,31 +127,33 @@ func (s *ChatServer) Listen(request *chat.AuthRequest, stream chat.Chat_ListenSe
 		return err
 	}
 	manager := s.roomProvider.GetRoomManager(room)
-	if manager == nil || !manager.inRoom(user) {
+	if manager == nil || !manager.InRoom(user) {
 		return errors.New("User not in room. ")
 	}
-	closeConnCh, err := manager.roomChatConnect(user, stream)
+	closeConnCh, err := manager.RoomChatConnect(user, &ChatListenServerAdapter{stream})
 	if err != nil {
 		return err
 	}
 	select {
-	case <-manager.roomCtx.Done():
-		manager.chatBroadcast(&chat.ChatMessage{
-			UUID:     uuid.NewString(),
-			UserUUID: uuid.NewString(),
-			UserName: "Server",
-			Time:     0,
-			Msg:      "Room closed by author or by server. You will be redirected. Bye! ",
-		})
 	case <-closeConnCh:
 	case <-stream.Context().Done():
 	}
 	return nil
 }
 
-func NewChatServer(provider *RoomProvider, repo *dto.Repository) *ChatServer {
+func NewChatServer(provider *services.RoomManagerProvider, repo *repo.Repository) *ChatServer {
 	return &ChatServer{
 		roomProvider: provider,
 		repo:         repo,
+	}
+}
+
+func buildPbChatMessage(msg domain.ChatMessage) *chat.ChatMessage {
+	return &chat.ChatMessage{
+		UUID:     msg.GetUUID().String(),
+		UserUUID: msg.GetUserUUID().String(),
+		UserName: msg.GetUserName(),
+		Time:     msg.GetTime(),
+		Msg:      msg.GetMsg(),
 	}
 }

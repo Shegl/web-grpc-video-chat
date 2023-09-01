@@ -4,14 +4,13 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"web-grpc-video-chat/src/dto"
 	"web-grpc-video-chat/src/http/requests"
-	"web-grpc-video-chat/src/services"
+	services2 "web-grpc-video-chat/src/internal/core/services"
 )
 
 type RoomController struct {
-	roomService *services.RoomService
-	authService *services.AuthService
+	roomService *services2.RoomService
+	authService *services2.AuthService
 }
 
 func (c *RoomController) Make(ctx *gin.Context) {
@@ -108,6 +107,6 @@ func (c *RoomController) getUser(userAuth string) (*dto.User, error) {
 	return user, err
 }
 
-func NewRoomController(roomService *services.RoomService, authService *services.AuthService) *RoomController {
+func NewRoomController(roomService *services2.RoomService, authService *services2.AuthService) *RoomController {
 	return &RoomController{roomService: roomService, authService: authService}
 }

@@ -1,10 +1,10 @@
 export CGO_ENABLED=0
 
 protos:
-	protoc --go_out=src/inroom/chat --go_opt=paths=source_relative \
-        --go-grpc_out=src/inroom/chat --go-grpc_opt=paths=source_relative chat.proto \
-        && protoc --go_out=src/inroom/stream --go_opt=paths=source_relative \
-		   --go-grpc_out=src/inroom/stream --go-grpc_opt=paths=source_relative stream.proto
+	protoc --go_out=src/pb/chat --go_opt=paths=source_relative \
+        --go-grpc_out=src/pb/chat --go-grpc_opt=paths=source_relative chat.proto \
+        && protoc --go_out=src/pb/stream --go_opt=paths=source_relative \
+		   --go-grpc_out=src/pb/stream --go-grpc_opt=paths=source_relative stream.proto
 
 
 protos-web:

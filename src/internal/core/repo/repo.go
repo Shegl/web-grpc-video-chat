@@ -1,19 +1,19 @@
-package dto
+package repo
 
 import (
-	"errors"
 	"github.com/google/uuid"
 	"sync"
+	"web-grpc-video-chat/src/internal/core/domain"
 )
 
 type lookupStorage struct {
 	// rooms
-	rooms    map[uuid.UUID]*Room
-	asAuthor map[uuid.UUID]*Room
-	asGuest  map[uuid.UUID]*Room
+	rooms    map[uuid.UUID]*domain.Room
+	asAuthor map[uuid.UUID]*domain.Room
+	asGuest  map[uuid.UUID]*domain.Room
 
 	// users
-	authUsers map[uuid.UUID]*User
+	authUsers map[uuid.UUID]*domain.User
 }
 
 type Repository struct {
@@ -21,26 +21,22 @@ type Repository struct {
 	ls lookupStorage
 }
 
-func (r *Repository) CreateUser(userName string) (*User, error) {
+func (r *Repository) CreateUser(userName string) (*domain.User, error) {
 	userUuid, err := uuid.NewRandom()
 	if err != nil {
-		return nil, err
+		return r.CreateUser(userName)
 	}
 	r.mu.Lock()
-	if _, exists := r.ls.authUsers[userUuid]; exists {
-		r.mu.Unlock()
-		return nil, errors.New("UUID taken. ")
-	}
-	user := &User{
+	defer r.mu.Unlock()
+	user := &domain.User{
 		Name: userName,
 		UUID: userUuid,
 	}
 	r.ls.authUsers[userUuid] = user
-	r.mu.Unlock()
 	return user, nil
 }
 
-func (r *Repository) CreateRoomForUser(user *User) *Room {
+func (r *Repository) CreateRoomForUser(user *domain.User) *domain.Room {
 	roomUuid, err := uuid.NewRandom()
 	if err != nil {
 		return r.CreateRoomForUser(user)
@@ -50,7 +46,7 @@ func (r *Repository) CreateRoomForUser(user *User) *Room {
 	if room, exists := r.ls.asAuthor[user.UUID]; exists {
 		return room
 	}
-	room := &Room{
+	room := &domain.Room{
 		UUID:   roomUuid,
 		Author: user,
 		Guest:  nil,
@@ -60,13 +56,13 @@ func (r *Repository) CreateRoomForUser(user *User) *Room {
 	return room
 }
 
-func (r *Repository) FindRoomByUuid(roomUuid uuid.UUID) *Room {
+func (r *Repository) FindRoomByUuid(roomUuid uuid.UUID) *domain.Room {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.ls.rooms[roomUuid]
 }
 
-func (r *Repository) FindRoomByUser(user *User) *Room {
+func (r *Repository) FindRoomByUser(user *domain.User) *domain.Room {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if room, exists := r.ls.asAuthor[user.UUID]; exists {
@@ -78,7 +74,7 @@ func (r *Repository) FindRoomByUser(user *User) *Room {
 	return nil
 }
 
-func (r *Repository) FindRoomByString(stringUUID string) (*Room, error) {
+func (r *Repository) FindRoomByString(stringUUID string) (*domain.Room, error) {
 	roomUUID, err := uuid.Parse(stringUUID)
 	if err != nil {
 		return nil, err
@@ -87,7 +83,7 @@ func (r *Repository) FindRoomByString(stringUUID string) (*Room, error) {
 	return room, nil
 }
 
-func (r *Repository) CommitUserJoin(room *Room, user *User) {
+func (r *Repository) CommitUserJoin(room *domain.Room, user *domain.User) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -95,14 +91,14 @@ func (r *Repository) CommitUserJoin(room *Room, user *User) {
 	r.ls.asGuest[user.UUID] = room
 }
 
-func (r *Repository) CommitUserLeave(room *Room) {
+func (r *Repository) CommitUserLeave(room *domain.Room) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.ls.asGuest, room.Guest.UUID)
 	room.Guest = nil
 }
 
-func (r *Repository) CommitRoomShutdown(room *Room) {
+func (r *Repository) CommitRoomShutdown(room *domain.Room) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -115,27 +111,27 @@ func (r *Repository) CommitRoomShutdown(room *Room) {
 	room.Author = nil
 }
 
-func (r *Repository) IsAuthor(user *User) bool {
+func (r *Repository) IsAuthor(user *domain.User) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	_, exists := r.ls.asAuthor[user.UUID]
 	return exists
 }
 
-func (r *Repository) IsGuest(user *User) bool {
+func (r *Repository) IsGuest(user *domain.User) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	_, exists := r.ls.asGuest[user.UUID]
 	return exists
 }
 
-func (r *Repository) FindUserByUuid(uuid uuid.UUID) *User {
+func (r *Repository) FindUserByUuid(uuid uuid.UUID) *domain.User {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.ls.authUsers[uuid]
 }
 
-func (r *Repository) FindUserByString(stringUUID string) (*User, error) {
+func (r *Repository) FindUserByString(stringUUID string) (*domain.User, error) {
 	userUUID, err := uuid.Parse(stringUUID)
 	if err != nil {
 		return nil, err
@@ -153,9 +149,9 @@ func NewRepository() *Repository {
 	return &Repository{
 		mu: sync.RWMutex{},
 		ls: lookupStorage{
-			rooms:     make(map[uuid.UUID]*Room),
-			asAuthor:  make(map[uuid.UUID]*Room),
-			asGuest:   make(map[uuid.UUID]*Room),
-			authUsers: make(map[uuid.UUID]*User),
+			rooms:     make(map[uuid.UUID]*domain.Room),
+			asAuthor:  make(map[uuid.UUID]*domain.Room),
+			asGuest:   make(map[uuid.UUID]*domain.Room),
+			authUsers: make(map[uuid.UUID]*domain.User),
 		}}
 }

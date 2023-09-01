@@ -4,33 +4,30 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"sync"
-	"web-grpc-video-chat/src/dto"
-	"web-grpc-video-chat/src/inroom"
+	"web-grpc-video-chat/src/internal/core/domain"
+	"web-grpc-video-chat/src/internal/core/repo"
 )
 
+// RoomService lol, can I have a cheeseburger ?
 type RoomService struct {
-	roomProvider *inroom.RoomProvider
-	repo         *dto.Repository
-	txLock       sync.RWMutex
+	managerProvider *RoomManagerProvider
+	repo            *repo.Repository
+	txLock          sync.RWMutex
 }
 
-func (r *RoomService) Create(user *dto.User) (*dto.Room, error) {
+func (r *RoomService) Create(user *domain.User) (*domain.Room, error) {
 	// "Create" must be atomic transaction, using mutex
 	r.txLock.Lock()
 	defer r.txLock.Unlock()
 	if r.repo.IsGuest(user) {
 		r.leaveAsGuest(user)
 	}
-	return r.create(user), nil
-}
-
-func (r *RoomService) create(user *dto.User) *dto.Room {
 	room := r.repo.CreateRoomForUser(user)
-	r.roomProvider.MakeRoomManager(room)
-	return room
+	r.managerProvider.makeRoomManager(room)
+	return room, nil
 }
 
-func (r *RoomService) Join(roomUuid uuid.UUID, user *dto.User) (*dto.Room, error) {
+func (r *RoomService) Join(roomUuid uuid.UUID, user *domain.User) (*domain.Room, error) {
 	r.txLock.Lock()
 	defer r.txLock.Unlock()
 
@@ -48,47 +45,45 @@ func (r *RoomService) Join(roomUuid uuid.UUID, user *dto.User) (*dto.Room, error
 	if room.Guest != nil {
 		return nil, errors.New("Room occupied. ")
 	}
-	return r.join(room, user), nil
-}
 
-func (r *RoomService) join(room *dto.Room, user *dto.User) *dto.Room {
-	manager := r.roomProvider.GetRoomManager(room)
+	manager := r.managerProvider.GetRoomManager(room)
 	if manager == nil || !manager.IsAlive() {
 		// room in state of deletion
-		return nil
+		return nil, errors.New("Room in process of deletion. ")
 	}
+
 	r.repo.CommitUserJoin(room, user)
 	manager.JoinRoom(user)
-	return room
+	return room, nil
 }
 
-func (r *RoomService) State(user *dto.User) *dto.Room {
+func (r *RoomService) State(user *domain.User) *domain.Room {
 	return r.repo.FindRoomByUser(user)
 }
 
-func (r *RoomService) Leave(user *dto.User) {
+func (r *RoomService) Leave(user *domain.User) {
 	r.txLock.Lock()
 	defer r.txLock.Unlock()
 
 	room := r.repo.FindRoomByUser(user)
 	if room.Author == user {
 		r.repo.CommitRoomShutdown(room)
-		r.roomProvider.Close(room)
+		r.managerProvider.Close(room)
 		return
 	}
 	r.leaveAsGuest(user)
 }
 
-func (r *RoomService) leaveAsGuest(user *dto.User) {
+func (r *RoomService) leaveAsGuest(user *domain.User) {
 	room := r.repo.FindRoomByUser(user)
 	r.repo.CommitUserLeave(room)
-	manager := r.roomProvider.GetRoomManager(room)
+	manager := r.managerProvider.GetRoomManager(room)
 	if manager != nil {
 		manager.GuestLeave(user)
 	}
 }
 
-func (r *RoomService) GetRoom(user *dto.User, stringUuid string) (*dto.Room, error) {
+func (r *RoomService) GetRoom(user *domain.User, stringUuid string) (*domain.Room, error) {
 	roomUuid, err := uuid.Parse(stringUuid)
 	if err != nil {
 		return nil, err
@@ -100,10 +95,10 @@ func (r *RoomService) GetRoom(user *dto.User, stringUuid string) (*dto.Room, err
 	return nil, errors.New("Wrong room. ")
 }
 
-func NewRoomService(provider *inroom.RoomProvider, repo *dto.Repository) *RoomService {
+func NewRoomService(provider *RoomManagerProvider, repo *repo.Repository) *RoomService {
 	return &RoomService{
-		roomProvider: provider,
-		repo:         repo,
-		txLock:       sync.RWMutex{},
+		managerProvider: provider,
+		repo:            repo,
+		txLock:          sync.RWMutex{},
 	}
 }

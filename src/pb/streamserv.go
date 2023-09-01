@@ -1,4 +1,4 @@
-package inroom
+package pb
 
 import (
 	"bytes"
@@ -14,8 +14,7 @@ import (
 	"net/http"
 	"sync"
 	"time"
-	"web-grpc-video-chat/src/dto"
-	"web-grpc-video-chat/src/inroom/stream"
+	"web-grpc-video-chat/src/api/stream"
 )
 
 var PingPacket = []byte{0x50, 0x49, 0x4e, 0x47}
@@ -190,7 +189,7 @@ func (s *StreamServer) handleWS(ws *websocket.Conn) {
 	}
 }
 
-func (s *StreamServer) readLoop(ws *websocket.Conn, state *RoomState, user *dto.User) {
+func (s *StreamServer) readLoop(ws *websocket.Conn, state *RoomState, user *model.User) {
 	// buffer for reads, 128kb per connection
 	buf := make([]byte, 1024*128)
 

@@ -3,9 +3,8 @@ package controllers
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"web-grpc-video-chat/src/dto"
 	"web-grpc-video-chat/src/http/requests"
-	"web-grpc-video-chat/src/services"
+	"web-grpc-video-chat/src/internal/core/services"
 )
 
 type AuthController struct {
@@ -18,7 +17,7 @@ func (c *AuthController) Check(ctx *gin.Context) {
 		ctx.JSON(422, nil)
 		return
 	}
-	var user *dto.User
+	var user *domain.User
 	userUuid, err := uuid.Parse(request.UUID)
 	if err == nil {
 		user, err = c.authService.GetUser(userUuid)
