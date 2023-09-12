@@ -131,7 +131,7 @@ func (m *RoomManager) GetChatHistory() []domain.ChatMessage {
 	return m.chat.getMessages()
 }
 
-func (m *RoomManager) ChatBroadcast(message domain.ChatMessage) {
+func (m *RoomManager) SendInChat(message domain.ChatMessage) {
 	m.chat.appendMessage(message)
 	m.mu.RLock()
 	m.author.sendChatMessage(message)

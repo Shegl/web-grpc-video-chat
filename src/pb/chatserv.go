@@ -106,7 +106,7 @@ func (s *ChatServer) SendMessage(ctx context.Context, request *chat.SendMessageR
 	}
 	manager := s.roomProvider.GetRoomManager(room)
 	if manager != nil && manager.InRoom(user) {
-		manager.ChatBroadcast(domain.ChatMessage{
+		manager.SendInChat(domain.ChatMessage{
 			Time:     time.Now().Unix(),
 			UUID:     uuid.New(),
 			UserUUID: user.UUID,
